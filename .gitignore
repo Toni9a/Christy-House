@@ -1,0 +1,5 @@
+dist/
+.vercel/
+node_modules/
+assets/gardening-hero.png
+assets/gardening-hero-v2.png
