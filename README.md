@@ -6,12 +6,13 @@ A private web app for the house, shared by invite link. Everyone who opens the l
 - **Add photos of each room** as it is now. Tap one to see it full screen.
 - **Add ideas for each room.** Snap or upload a photo of a bed, a sofa or a lamp you like, with a link and price if you have them. Anyone can add them.
 - **Open any idea** to see it big, **♥ love it** or mark it **not for me**, and **comment** ("love this colour", "found it cheaper: link").
-- **Check it with Google**: open the photo in Google Lens or Google Shopping, or (with a Google API key) ask “Where is this from?” to find shops with the same picture.
-- **Find it cheaper**: Claude searches the web for the same thing within your budget, sliders and all.
+- **Check it with Google**: open the photo in Google Lens or Google Shopping, or ask “Where is this from?” to have Gemini search the web for shops with the same picture.
+- **Find it cheaper**: Gemini searches the web for the same thing within your budget, sliders and all.
 - **Compare** up to four ideas side by side: price, size, whether it fits, who loves it, latest comment.
 - **Upload the LiDAR scan** of each room (GLB). It shows in 3D and fills in the room’s measurements.
 - See the **Value** tab: the working valuation for 10 Amherst Close, comparable sales on one chart, and known running costs. Edit `lib/valuation.ts` to update it.
-- Optionally **text it** photos or links (Twilio) and **preview items in your room** (Gemini).
+- **Preview it in your room**: Gemini draws the item into a photo of the room.
+- Optionally **text it** photos or links (Twilio).
 
 Everyone types their first name once on each device; it’s shown on what they add and say. There are no accounts or passwords.
 
@@ -23,10 +24,9 @@ Everyone types their first name once on each device; it’s shown on what they a
    - *Create → Blob*, access **Private**. This sets `BLOB_READ_WRITE_TOKEN` for you.
    The tables and the four starter rooms are created automatically the first time the site runs.
 3. **Add settings** under *Settings → Environment Variables*:
-   - `ANTHROPIC_API_KEY`: your Claude API key
+   - `GEMINI_API_KEY`: a free key from [aistudio.google.com/apikey](https://aistudio.google.com/apikey) — powers Find, "Where is this from?" and room previews
    - `INVITE_CODE`: a long random phrase, e.g. `oak-lamp-4821-velvet`
    - `PUBLIC_BASE_URL`: the site’s address, e.g. `https://christys-house.vercel.app`
-   - Optional: `GOOGLE_API_KEY` (enable the Cloud Vision API on it), `GEMINI_API_KEY`
 4. **Deploy**, then share this link with the people you want in:
    `https://<your-site>/join/<INVITE_CODE>`
    Opening it lets that device in for a year. Anyone without it sees a “this house is private” page. To shut everyone out, change `INVITE_CODE` and share the new link.
@@ -36,7 +36,7 @@ Uploads go straight from the phone to Vercel Blob. Photos are shrunk to 2000px f
 ## Run it on your own computer
 
 ```bash
-cp .env.example .env.local     # ANTHROPIC_API_KEY is enough to start
+cp .env.example .env.local     # GEMINI_API_KEY is enough to start
 npm install
 npm run dev                     # http://localhost:3000
 ```
@@ -54,8 +54,8 @@ Without `DATABASE_URL`, everything is saved to a JSON file in `.data/`. Set `DAT
 | Items, loves, comments | `app/api/items/**`, `components/ItemBoard.tsx`, `ItemDetail.tsx` | Statuses: Idea, To buy, Ordered, Have it. |
 | Room photos | `components/RoomPhotos.tsx`, `app/api/rooms/[id]/photos` | |
 | Compare | `app/compare` | Marks the cheapest and the most loved. |
-| Google checks | `app/api/items/[id]/google`, `lib/lens.ts` | Google has no official Lens API, so the Lens button opens the photo in Lens directly. “Where is this from?” uses Cloud Vision web detection. |
-| Product finder | `lib/finder.ts` | Claude (`claude-opus-5-5`) with web search and web fetch, returning structured results. If Claude declines a request, the API retries on a fallback model. |
+| Google checks | `app/api/items/[id]/google`, `lib/lens.ts` | Google has no official Lens API, so the Lens button opens the photo in Lens directly. “Where is this from?” asks Gemini to search the web and cites what it finds. |
+| Product finder | `lib/finder.ts`, `lib/gemini.ts` | Gemini (`gemini-3.5-flash` by default) with Google Search grounding and structured JSON output, all through one `GEMINI_API_KEY`. |
 | Scans | `components/ScanViewer.tsx` | GLB in a 3D viewer; its bounding box gives the room size. |
 | Texting | `app/api/sms/route.ts` | Twilio webhook. Signature-checked; only `ALLOWED_PHONE_NUMBERS` get replies. |
 

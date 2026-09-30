@@ -1,12 +1,9 @@
 import "server-only";
-import Anthropic from "@anthropic-ai/sdk";
 import { z } from "zod";
 import { config } from "./config";
-import { lensLookup, lensToPrompt } from "./lens";
+import { callGemini, extractGeminiText, type GeminiPart } from "./gemini";
 import { SOURCES } from "./sources";
 import type { Filters, Identified, Product, Room } from "./types";
-
-const client = new Anthropic();
 
 export type FindInput = {
   query: string;
@@ -18,7 +15,7 @@ export type FindInput = {
 
 export type FindOutput = { identified: Identified; summary: string; products: Product[] };
 
-// ── Output contract: Claude must finish by calling this tool ─────────────────
+// ── Output contract: Gemini must answer with exactly this shape ──────────────
 const ProductSchema = z.object({
   title: z.string(),
   price: z.number().nullable(),
@@ -46,69 +43,64 @@ const ResultSchema = z.object({
   products: z.array(ProductSchema),
 });
 
+// Gemini's structured-output dialect: JSON Schema with type-array nulls (not OpenAPI "nullable").
 const num = { type: ["number", "null"] } as const;
 const str = { type: "string" } as const;
 const strArr = { type: "array", items: str } as const;
 
-const submitTool: Anthropic.Beta.BetaTool = {
-  name: "submit_results",
-  description: "Submit the final shortlist. Call exactly once, when you are done searching.",
-  strict: true,
-  eager_input_streaming: true,
-  input_schema: {
-    type: "object",
-    additionalProperties: false,
-    required: ["identified", "summary", "products"],
-    properties: {
-      identified: {
+const RESPONSE_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: ["identified", "summary", "products"],
+  properties: {
+    identified: {
+      type: "object",
+      additionalProperties: false,
+      required: ["name", "category", "style", "materials", "colors", "search_terms"],
+      properties: {
+        name: { ...str, description: "What the reference item is, e.g. 'Boucle curved 3-seater sofa'" },
+        category: { ...str, description: "sofa, bed, bedding, rug, table, lamp, chair, storage, decor…" },
+        style: str,
+        materials: strArr,
+        colors: strArr,
+        search_terms: { ...strArr, description: "3-5 short queries a human would type into a shop search box" },
+      },
+    },
+    summary: { ...str, description: "Two sentences max: what you looked for and the standout pick." },
+    products: {
+      type: "array",
+      items: {
         type: "object",
         additionalProperties: false,
-        required: ["name", "category", "style", "materials", "colors", "search_terms"],
+        required: ["title", "price", "currency", "url", "source", "image_url", "width_cm", "depth_cm", "height_cm", "condition", "match_score", "why"],
         properties: {
-          name: { ...str, description: "What the reference item is, e.g. 'Boucle curved 3-seater sofa'" },
-          category: { ...str, description: "sofa, bed, bedding, rug, table, lamp, chair, storage, decor…" },
-          style: str,
-          materials: strArr,
-          colors: strArr,
-          search_terms: { ...strArr, description: "3-5 short queries a human would type into a shop search box" },
-        },
-      },
-      summary: { ...str, description: "Two sentences max: what you looked for and the standout pick." },
-      products: {
-        type: "array",
-        items: {
-          type: "object",
-          additionalProperties: false,
-          required: Object.keys(ProductSchema.shape),
-          properties: {
-            title: str,
-            price: { ...num, description: "Current price as a number, no symbol" },
-            currency: { ...str, description: "ISO code, e.g. GBP" },
-            url: { ...str, description: "Direct product/listing URL you actually saw in results" },
-            source: { ...str, description: "Retailer or marketplace name" },
-            image_url: { type: ["string", "null"], description: "Direct image URL if you saw one, else null" },
-            width_cm: num,
-            depth_cm: num,
-            height_cm: num,
-            condition: { type: "string", enum: ["new", "used", "unknown"] },
-            match_score: { type: "number", description: "0-100 visual/functional similarity to the reference" },
-            why: { ...str, description: "One short line on why it matches (or how it differs)" },
-          },
+          title: str,
+          price: { ...num, description: "Current price as a number, no symbol" },
+          currency: { ...str, description: "ISO code, e.g. GBP" },
+          url: { ...str, description: "Direct product/listing URL you actually saw in search results — never invented" },
+          source: { ...str, description: "Retailer or marketplace name" },
+          image_url: { type: ["string", "null"], description: "Direct image URL if you saw one, else null" },
+          width_cm: num,
+          depth_cm: num,
+          height_cm: num,
+          condition: { type: "string", enum: ["new", "used", "unknown"] },
+          match_score: { type: "number", description: "0-100 visual/functional similarity to the reference" },
+          why: { ...str, description: "One short line on why it matches (or how it differs)" },
         },
       },
     },
   },
-};
+} as const;
 
 const SYSTEM = `You are the shopping brain of a personal home portal. The owner sends you a photo, a product link, and/or a description of something for their house (sofas, bedding, rugs, tables, lighting, storage, decor…). Your job: work out exactly what the item is, then find real, currently-available products that match it within their constraints.
 
 How to work:
-1. Identify the reference item: category, silhouette, materials, colours, style, and any brand/model if recognisable. If you were given a link, fetch it first to read the real product details and price.
+1. Identify the reference item: category, silhouette, materials, colours, style, and any brand/model if recognisable. If you were given a link, open it first to read the real product details and price.
 2. Search the web for matches. Prefer direct product pages over listicles. Search several retailers — including second-hand marketplaces when allowed — and vary your queries (style words, materials, "dupe", "similar to <brand model>").
 3. Respect the budget and size limits strictly. Anything outside them is excluded, not flagged.
-4. Only include URLs you actually saw in search or fetch results. Never invent products, prices, URLs or dimensions — use null when unknown.
+4. Only include URLs you actually saw in search results. Never invent products, prices, URLs or dimensions — use null when unknown.
 5. Aim for 6–12 strong results, sorted best first, with a spread of price points inside the budget.
-6. Finish by calling submit_results exactly once. Do not write a prose answer.`;
+6. Answer with the required JSON only. No prose outside it.`;
 
 function buildBrief(input: FindInput) {
   const f = input.filters;
@@ -138,68 +130,56 @@ function buildBrief(input: FindInput) {
   }
   if (input.link) lines.push(`Reference link: ${input.link}`);
   if (input.query) lines.push(`What they said: "${input.query}"`);
-  if (input.image) lines.push("A reference photo is attached above.");
+  if (input.image) lines.push("A reference photo is attached.");
   return lines.join("\n");
 }
 
+const MODEL = process.env.GEMINI_SEARCH_MODEL || "gemini-3.5-flash";
+
+function parseResult(text: string): FindOutput {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    throw new Error("Gemini's response wasn't valid JSON.");
+  }
+  const result = ResultSchema.safeParse(parsed);
+  if (!result.success) throw new Error("Result didn't match the expected shape: " + result.error.message);
+  return result.data;
+}
+
 export async function findProducts(input: FindInput): Promise<FindOutput> {
-  const content: Anthropic.Beta.BetaContentBlockParam[] = [];
-  if (input.image) {
-    content.push({
-      type: "image",
-      source: { type: "base64", media_type: input.image.mediaType as "image/jpeg", data: input.image.base64 },
+  // Gemini reads the photo directly — no separate vision-lookup pass needed first.
+  const parts: GeminiPart[] = [];
+  if (input.image) parts.push({ type: "image", data: input.image.base64, mime_type: input.image.mediaType });
+  parts.push({ type: "text", text: buildBrief(input) });
+
+  const tools = [{ type: "google_search" }, { type: "url_context" }];
+  const responseFormat = { type: "text", mime_type: "application/json", schema: RESPONSE_SCHEMA };
+
+  // One call: search, read pages, and answer in the required JSON shape.
+  const first = await callGemini({ model: MODEL, system_instruction: SYSTEM, input: parts, tools, response_format: responseFormat });
+  let text = extractGeminiText(first);
+
+  if (!text.trim()) {
+    // Some models can't combine tools with structured output in one go — fall back to
+    // two calls: gather grounded findings first, then ask for the JSON from those notes.
+    const gather = await callGemini({ model: MODEL, system_instruction: SYSTEM, input: parts, tools });
+    const findings = extractGeminiText(gather);
+    if (!findings.trim()) throw new Error("Gemini didn't return anything. Try again, or narrow the search.");
+
+    const structured = await callGemini({
+      model: MODEL,
+      system_instruction: "Turn the research notes into the required JSON shape. Use only URLs, prices and sizes that appear in the notes.",
+      input: [{ type: "text", text: findings }],
+      response_format: responseFormat,
     });
-    const lens = await lensLookup({ base64: input.image.base64, publicUrl: input.image.publicUrl });
-    if (lens?.hits.length || lens?.labels.length) content.push({ type: "text", text: lensToPrompt(lens) });
+    text = extractGeminiText(structured);
+    if (!text.trim()) throw new Error("Couldn't get a structured result from Gemini.");
   }
-  content.push({ type: "text", text: buildBrief(input) });
 
-  const tools: Anthropic.Beta.BetaToolUnion[] = [
-    {
-      type: "web_search_20260209",
-      name: "web_search",
-      max_uses: 10,
-      user_location: { type: "approximate", country: config.country, city: config.city },
-    },
-    { type: "web_fetch_20260209", name: "web_fetch", max_uses: 6 },
-    submitTool,
-  ];
-
-  const messages: Anthropic.Beta.BetaMessageParam[] = [{ role: "user", content }];
-
-  for (let turn = 0; turn < 6; turn++) {
-    const msg = await client.beta.messages
-      .stream({
-        model: config.model,
-        max_tokens: 32000,
-        system: SYSTEM,
-        tools,
-        messages,
-        output_config: { effort: "medium" },
-        // If a safety classifier declines, retry on the API's recommended fallback model.
-        betas: ["server-side-fallback-2026-07-01"],
-        fallbacks: "default",
-      })
-      .finalMessage();
-
-    if (msg.stop_reason === "refusal") throw new Error("Claude declined this request.");
-
-    const submit = msg.content.find(
-      (b): b is Anthropic.Beta.BetaToolUseBlock => b.type === "tool_use" && b.name === "submit_results",
-    );
-    if (submit) {
-      const parsed = ResultSchema.safeParse(submit.input);
-      if (!parsed.success) throw new Error("Result didn't match the expected shape: " + parsed.error.message);
-      return { ...parsed.data, products: postFilter(parsed.data.products, input.filters) };
-    }
-
-    messages.push({ role: "assistant", content: msg.content });
-    // pause_turn = long server-side search loop paused; resend to let it continue.
-    if (msg.stop_reason !== "pause_turn") {
-      messages.push({ role: "user", content: "Please call submit_results now with the best matches you have found." });
-    }
-  }
-  throw new Error("Search didn't finish — try narrowing it down.");
+  const out = parseResult(text);
+  return { ...out, products: postFilter(out.products, input.filters) };
 }
 
 /** Belt and braces: enforce the hard constraints ourselves too. */

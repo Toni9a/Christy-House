@@ -1,6 +1,5 @@
 export const config = {
   houseName: process.env.HOUSE_NAME || "Christy’s House",
-  model: "claude-opus-5-5",
   country: process.env.HOME_COUNTRY || "GB",
   city: process.env.HOME_CITY || "London",
   currency: process.env.CURRENCY || "GBP",

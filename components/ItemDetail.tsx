@@ -8,11 +8,11 @@ import { dimsText, STATUS_STYLE } from "@/lib/items";
 import { Avatar, timeAgo } from "./People";
 import { Button, Card, Label, inputCls } from "./ui";
 
-type GoogleResult = { labels: string[]; hits: { title: string; url: string }[]; similar: string[] };
+type CheckResult = { labels: string[]; hits: { title: string; url: string }[] };
 
 export function ItemDetail(props: {
   item: Item; rooms: Room[]; comments: Comment[]; reactions: Reaction[];
-  who: string | null; baseUrl: string; googleEnabled: boolean;
+  who: string | null; baseUrl: string; checkEnabled: boolean;
 }) {
   const router = useRouter();
   const [item, setItem] = useState(props.item);
@@ -117,7 +117,7 @@ export function ItemDetail(props: {
             )}
           </Card>
 
-          <CheckPanel item={item} imageAbs={imageAbs} googleEnabled={props.googleEnabled} />
+          <CheckPanel item={item} imageAbs={imageAbs} checkEnabled={props.checkEnabled} />
         </div>
       </div>
 
@@ -159,10 +159,10 @@ function EditForm({ item, onSave, onCancel }: { item: Item; onSave: (p: Partial<
   );
 }
 
-/** Ways to check the item: Google Lens, Google Shopping, a Google Vision lookup, and a Claude search for cheaper ones. */
-function CheckPanel({ item, imageAbs, googleEnabled }: { item: Item; imageAbs: string | null; googleEnabled: boolean }) {
+/** Ways to check the item: Google Lens, Google Shopping, a Gemini-powered source lookup, and a cheaper search. */
+function CheckPanel({ item, imageAbs, checkEnabled }: { item: Item; imageAbs: string | null; checkEnabled: boolean }) {
   const [busy, setBusy] = useState(false);
-  const [result, setResult] = useState<GoogleResult | null>(null);
+  const [result, setResult] = useState<CheckResult | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   async function check() {
@@ -180,16 +180,16 @@ function CheckPanel({ item, imageAbs, googleEnabled }: { item: Item; imageAbs: s
       <div className="grid grid-cols-2 gap-2">
         {imageAbs && <a className={btn} href={`https://lens.google.com/uploadbyurl?url=${encodeURIComponent(imageAbs)}`} target="_blank" rel="noopener noreferrer">Google Lens ↗</a>}
         <a className={btn} href={`https://www.google.com/search?tbm=shop&q=${encodeURIComponent(item.title)}`} target="_blank" rel="noopener noreferrer">Google Shopping ↗</a>
-        {googleEnabled && item.image_url && <button className={btn} onClick={check} disabled={busy}>{busy ? "Checking…" : "Where is this from?"}</button>}
+        {checkEnabled && item.image_url && <button className={btn} onClick={check} disabled={busy}>{busy ? "Checking…" : "Where is this from?"}</button>}
         <Link className={`${btn} border-accent bg-accent-soft text-accent hover:bg-accent-soft`} href={`/find?item=${item.id}${item.roomId ? `&room=${item.roomId}` : ""}`}>Find it cheaper</Link>
       </div>
       {error && <p className="rounded-lg bg-warn-soft px-3 py-2 text-sm text-warn">{error}</p>}
       {result && (
         <div className="space-y-3 border-t border-line pt-3 text-sm">
-          {result.labels.length > 0 && <p><span className="text-muted">Google thinks this is:</span> <b className="font-medium">{result.labels.slice(0, 3).join(", ")}</b></p>}
+          {result.labels.length > 0 && <p><span className="text-muted">Looks like:</span> <b className="font-medium">{result.labels.slice(0, 3).join(", ")}</b></p>}
           {result.hits.length > 0 ? (
             <div>
-              <p className="mb-1.5 text-muted">Pages with the same picture</p>
+              <p className="mb-1.5 text-muted">Pages that show it</p>
               <ul className="space-y-1">
                 {result.hits.slice(0, 6).map((h) => (
                   <li key={h.url} className="truncate"><a href={h.url} target="_blank" rel="noopener noreferrer" className="underline decoration-line underline-offset-2 hover:text-accent">{h.title}</a></li>
@@ -197,13 +197,6 @@ function CheckPanel({ item, imageAbs, googleEnabled }: { item: Item; imageAbs: s
               </ul>
             </div>
           ) : <p className="text-muted">No exact matches found online. Try Google Lens for similar items.</p>}
-          {result.similar.length > 0 && (
-            <div className="flex gap-2 overflow-x-auto">
-              {result.similar.map((u) => (
-                <a key={u} href={u} target="_blank" rel="noopener noreferrer" className="shrink-0"><img src={u} alt="" referrerPolicy="no-referrer" className="size-16 rounded-lg object-cover" /></a>
-              ))}
-            </div>
-          )}
         </div>
       )}
     </Card>

@@ -1,79 +1,59 @@
 import "server-only";
+import { callGemini, extractGeminiText } from "./gemini";
 
 /**
- * "Google Lens"-style visual lookups. Google has no official Lens API, so we
- * support two optional boosters and feed whatever they return to Claude as hints:
- *
- *  - Google Cloud Vision `WEB_DETECTION` (official): best-guess labels, entities and
- *    pages that contain visually matching images. Works with raw image bytes.
- *  - SerpApi `google_lens` (unofficial, paid): real Lens "visual matches", often with
- *    prices. Needs a publicly reachable image URL.
- *
- * With neither key set, Claude's own vision does the identifying — which is usually enough.
+ * "Where is this from?" — one Gemini key does the whole job: it looks at the
+ * photo, searches the web, and says what it thinks the item is and where it
+ * saw it. The model writes the source pages into the JSON itself — when a
+ * response is schema-constrained like this, Gemini doesn't attach the usual
+ * search-citation annotations, so asking for them directly is what works.
  */
-export type LensHit = { title: string; url: string; source?: string; price?: string; thumbnail?: string };
-const googleKey = () => process.env.GOOGLE_API_KEY || process.env.GOOGLE_VISION_API_KEY;
-export const googleEnabled = () => Boolean(googleKey());
-export type LensResult = { provider: string; labels: string[]; hits: LensHit[] };
+export type LensHit = { title: string; url: string };
+export type LensResult = { labels: string[]; hits: LensHit[] };
 
-export async function lensLookup(opts: { base64?: string; publicUrl?: string }): Promise<LensResult | null> {
-  try {
-    if (process.env.SERPAPI_KEY && opts.publicUrl) return await serpLens(opts.publicUrl);
-    if (googleKey() && opts.base64) return await visionWeb(opts.base64);
-  } catch (e) {
-    console.warn("[lens] lookup failed, continuing with Claude vision only:", e);
-  }
-  return null;
-}
+const MODEL = process.env.GEMINI_SEARCH_MODEL || "gemini-3.5-flash";
 
-export async function visionWeb(base64: string): Promise<LensResult & { similar: string[] }> {
-  const res = await fetch(`https://vision.googleapis.com/v1/images:annotate?key=${googleKey()}`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({
-      requests: [{ image: { content: base64 }, features: [{ type: "WEB_DETECTION", maxResults: 15 }] }],
-    }),
-  });
-  if (!res.ok) throw new Error(`Vision ${res.status}: ${await res.text()}`);
-  const web = (await res.json()).responses?.[0]?.webDetection ?? {};
-  return {
-    provider: "google-vision",
-    labels: [
-      ...(web.bestGuessLabels ?? []).map((l: { label: string }) => l.label),
-      ...(web.webEntities ?? []).filter((e: { description?: string }) => e.description).slice(0, 8).map((e: { description: string }) => e.description),
+const SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: ["labels", "hits"],
+  properties: {
+    labels: { type: "array", items: { type: "string" }, description: "2-4 short phrases naming what the item is, best guess first" },
+    hits: {
+      type: "array",
+      description: "Real pages you found in search results that show or sell this item, best match first",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["title", "url"],
+        properties: {
+          title: { type: "string", description: "Page or shop name" },
+          url: { type: "string", description: "The exact URL you saw in search results" },
+        },
+      },
+    },
+  },
+} as const;
+
+export async function identifySource(base64: string, mediaType: string): Promise<LensResult> {
+  const data = await callGemini({
+    model: MODEL,
+    system_instruction: "Identify the item in the photo, then search the web for real pages that show it or sell it. Answer with the required JSON only.",
+    input: [
+      { type: "image", data: base64, mime_type: mediaType },
+      { type: "text", text: "What is this, and where can I find it online?" },
     ],
-    hits: (web.pagesWithMatchingImages ?? []).slice(0, 12).map((p: { url: string; pageTitle?: string }) => ({
-      title: (p.pageTitle ?? "").replace(/<[^>]+>/g, "") || new URL(p.url).hostname,
-      url: p.url,
-    })),
-    similar: (web.visuallySimilarImages ?? []).slice(0, 8).map((i: { url: string }) => i.url),
-  };
-}
+    tools: [{ type: "google_search" }],
+    response_format: { type: "text", mime_type: "application/json", schema: SCHEMA },
+  });
 
-async function serpLens(imageUrl: string): Promise<LensResult> {
-  const u = new URL("https://serpapi.com/search.json");
-  u.searchParams.set("engine", "google_lens");
-  u.searchParams.set("url", imageUrl);
-  u.searchParams.set("api_key", process.env.SERPAPI_KEY!);
-  const res = await fetch(u);
-  if (!res.ok) throw new Error(`SerpApi ${res.status}`);
-  const data = await res.json();
-  return {
-    provider: "google-lens (serpapi)",
-    labels: [],
-    hits: (data.visual_matches ?? []).slice(0, 15).map((m: any) => ({
-      title: m.title,
-      url: m.link,
-      source: m.source,
-      price: m.price?.value,
-      thumbnail: m.thumbnail,
-    })),
-  };
-}
-
-export function lensToPrompt(l: LensResult) {
-  const lines = [`Visual search hints from ${l.provider} (may be noisy — verify):`];
-  if (l.labels.length) lines.push(`Labels: ${l.labels.join(", ")}`);
-  for (const h of l.hits) lines.push(`- ${h.title} ${h.price ? `(${h.price}) ` : ""}${h.url}`);
-  return lines.join("\n");
+  try {
+    const parsed = JSON.parse(extractGeminiText(data));
+    return {
+      labels: Array.isArray(parsed?.labels) ? parsed.labels : [],
+      hits: Array.isArray(parsed?.hits) ? parsed.hits.filter((h: any) => h?.url) : [],
+    };
+  } catch {
+    return { labels: [], hits: [] };
+  }
 }
