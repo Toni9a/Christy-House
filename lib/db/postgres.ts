@@ -14,11 +14,11 @@ import { contentTypeOf, fileName, newId, STARTER_ROOMS } from "./util";
 const blobAccess = (process.env.BLOB_ACCESS === "public" ? "public" : "private") as "public" | "private";
 /**
  * Without Blob configured (e.g. testing against a local database), files stay on local disk.
- * Vercel connects Blob two ways: an explicit BLOB_READ_WRITE_TOKEN, or (newer) just a
- * BLOB_STORE_ID with the deployment's own OIDC identity authenticating automatically —
- * the @vercel/blob SDK itself handles picking between them.
+ * This specifically needs the real BLOB_READ_WRITE_TOKEN: uploads go straight from the
+ * browser to Blob, which means minting a signed client token first — the newer
+ * BLOB_STORE_ID + automatic OIDC auth covers server-side put()/get() calls, but not that.
  */
-export const usingBlob = () => Boolean(process.env.BLOB_READ_WRITE_TOKEN || process.env.BLOB_STORE_ID);
+export const usingBlob = () => Boolean(process.env.BLOB_READ_WRITE_TOKEN);
 
 type Sql = ReturnType<typeof postgres>;
 let client: Sql | null = null;
