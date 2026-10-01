@@ -9,11 +9,12 @@ import { Button, Card } from "./ui";
 
 type RoomRef = { id: string; name: string };
 
-export function MoveIn({ rooms, photos, readings, houseScan }: { rooms: RoomRef[]; photos: RoomPhoto[]; readings: MeterReading[]; houseScan: string | null }) {
+export function MoveIn({ rooms, photos, readings, houseScan, floorPlans }: { rooms: RoomRef[]; photos: RoomPhoto[]; readings: MeterReading[]; houseScan: string | null; floorPlans: { file: string; label: string }[] }) {
   return (
     <>
       <Meters readings={readings} />
       <BarePhotos rooms={rooms} photos={photos} />
+      <FloorPlans plans={floorPlans} />
       <HouseScan file={houseScan} />
     </>
   );
@@ -405,6 +406,81 @@ function HouseScan({ file: initial }: { file: string | null }) {
         </>
       ) : (
         <p className="rounded-2xl border border-dashed border-line px-4 py-8 text-center text-sm text-muted">No house scan yet. Upload a GLB export from Polycam.</p>
+      )}
+    </section>
+  );
+}
+
+// ── Floor plans (images, e.g. screenshots from Polycam's floor plan view) ──
+
+function FloorPlans({ plans: initial }: { plans: { file: string; label: string }[] }) {
+  const router = useRouter();
+  const [plans, setPlans] = useState(initial);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [open, setOpen] = useState<string | null>(null);
+  useEffect(() => setPlans(initial), [initial]);
+
+  async function add(f: File | null) {
+    if (!f) return;
+    const label = prompt("What is this floor plan? e.g. First floor", "") ?? "";
+    setBusy(true); setError(null);
+    try {
+      const file = await uploadFile(f);
+      const res = await fetch("/api/floor-plans", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ file, label }) });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      setPlans(data);
+      router.refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Upload failed");
+    }
+    setBusy(false);
+  }
+
+  async function remove(file: string) {
+    setPlans((p) => p.filter((x) => x.file !== file));
+    await fetch("/api/floor-plans", { method: "DELETE", headers: { "content-type": "application/json" }, body: JSON.stringify({ file }) });
+    router.refresh();
+  }
+
+  return (
+    <section>
+      <div className="mb-4 flex items-end justify-between gap-3">
+        <div>
+          <h2 className="font-display text-2xl">Floor plans</h2>
+          <p className="text-sm text-muted">Top-down plans of each floor, for working out where furniture goes. From the Polycam scan, so treat sizes as approximate.</p>
+        </div>
+        <label className={`cursor-pointer rounded-xl border border-line bg-surface px-3.5 py-2 text-sm font-medium transition hover:bg-sunken ${busy ? "pointer-events-none opacity-60" : ""}`}>
+          {busy ? "Uploading…" : "+ Add plan"}
+          <input type="file" accept="image/*" hidden onChange={(e) => { add(e.target.files?.[0] ?? null); e.target.value = ""; }} />
+        </label>
+      </div>
+      {error && <p className="mb-3 rounded-lg bg-warn-soft px-3 py-2 text-sm text-warn">{error}</p>}
+      {plans.length ? (
+        <div className="grid gap-4 sm:grid-cols-2">
+          {plans.map((p) => (
+            <figure key={p.file} className="m-0 overflow-hidden rounded-2xl border border-line bg-surface">
+              <button onClick={() => setOpen(p.file)} className="block w-full bg-sunken p-3">
+                <img src={fileUrl(p.file)} alt={p.label} loading="lazy" className="mx-auto max-h-96 object-contain" />
+              </button>
+              <figcaption className="flex items-center justify-between gap-3 px-4 py-3 text-sm">
+                <b className="font-medium">{p.label}</b>
+                <span className="flex gap-3 text-[13px] text-muted">
+                  <a href={fileUrl(p.file)} download className="text-accent">Download</a>
+                  <button onClick={() => confirm(`Remove “${p.label}”?`) && remove(p.file)} className="hover:text-warn">Remove</button>
+                </span>
+              </figcaption>
+            </figure>
+          ))}
+        </div>
+      ) : (
+        <p className="rounded-2xl border border-dashed border-line px-4 py-8 text-center text-sm text-muted">No floor plans yet</p>
+      )}
+      {open && (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-black/85 p-4" onClick={() => setOpen(null)}>
+          <img src={fileUrl(open)} alt="" className="max-h-full max-w-full object-contain" />
+        </div>
       )}
     </section>
   );
