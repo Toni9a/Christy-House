@@ -3,6 +3,8 @@ import { useCallback, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Room } from "@/lib/types";
 import { uploadFile } from "@/lib/upload";
+import { ROOM_PLANS } from "@/lib/room-plans";
+import { RoomPlanView } from "./RoomPlanView";
 import { ScanViewer, type Measured } from "./ScanViewer";
 import { Button, Card, Label, inputCls } from "./ui";
 
@@ -20,6 +22,8 @@ export function RoomEditor({ room }: { room: Room }) {
   const router = useRouter();
   const [draft, setDraft] = useState(room);
   const [measured, setMeasured] = useState<Measured | null>(null);
+  const plan = ROOM_PLANS[room.id];
+  const [view, setView] = useState<"3d" | "plan">("3d");
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
@@ -63,7 +67,17 @@ export function RoomEditor({ room }: { room: Room }) {
   return (
     <div className="grid gap-6 lg:grid-cols-[1.3fr_1fr]">
       <Card className="p-4">
-        {draft.scanFile ? (
+        {plan && (
+          <div className="mb-3 inline-flex rounded-full border border-line bg-sunken p-0.5 text-sm" role="tablist">
+            {([["3d", "3D view"], ["plan", "Annotated plan"]] as const).map(([v, l]) => (
+              <button key={v} role="tab" aria-selected={view === v} onClick={() => setView(v)}
+                className={`rounded-full px-4 py-1.5 transition ${view === v ? "bg-ink text-paper" : "text-muted hover:text-ink"}`}>{l}</button>
+            ))}
+          </div>
+        )}
+        {plan && view === "plan" ? (
+          <RoomPlanView plan={plan} roomName={draft.name} />
+        ) : draft.scanFile ? (
           <ScanViewer src={`/api/files/${draft.scanFile}`} onMeasured={onMeasured} iso label={sizeLabel(draft.dims)} />
         ) : (
           <div className="flex aspect-[4/3] flex-col items-center justify-center gap-2 rounded-2xl bg-sunken p-6 text-center">
