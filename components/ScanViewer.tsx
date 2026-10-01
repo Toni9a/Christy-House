@@ -19,15 +19,22 @@ export type Measured = { width: number; depth: number; height: number };
  * Renders a LiDAR export (GLB from Polycam / 3D Scanner App / RoomPlan→GLB) and
  * reads its bounding box. Scans are in metres; we report centimetres.
  */
-export function ScanViewer({ src, onMeasured }: { src: string; onMeasured?: (m: Measured) => void }) {
+export function ScanViewer({ src, onMeasured, lazy = false, sizeLabel, fallbackHref }: {
+  src: string; onMeasured?: (m: Measured) => void;
+  /** Wait for a tap before downloading and drawing the model. Kinder to phones. */
+  lazy?: boolean; sizeLabel?: string; fallbackHref?: string;
+}) {
   const ref = useRef<ModelViewerEl>(null);
   const [ready, setReady] = useState(false);
+  const [armed, setArmed] = useState(!lazy);
+  const [failed, setFailed] = useState(false);
   const [dims, setDims] = useState<Measured | null>(null);
   const isUsdz = src.toLowerCase().endsWith(".usdz");
 
   useEffect(() => {
-    import("@google/model-viewer").then(() => setReady(true));
-  }, []);
+    if (!armed) return;
+    import("@google/model-viewer").then(() => setReady(true)).catch(() => setFailed(true));
+  }, [armed]);
 
   useEffect(() => {
     const el = ref.current;
@@ -38,8 +45,10 @@ export function ScanViewer({ src, onMeasured }: { src: string; onMeasured?: (m: 
       setDims(m);
       onMeasured?.(m);
     };
+    const onError = () => setFailed(true);
     el.addEventListener("load", onLoad);
-    return () => el.removeEventListener("load", onLoad);
+    el.addEventListener("error", onError);
+    return () => { el.removeEventListener("load", onLoad); el.removeEventListener("error", onError); };
   }, [ready, src, onMeasured]);
 
   if (isUsdz) {
@@ -47,6 +56,24 @@ export function ScanViewer({ src, onMeasured }: { src: string; onMeasured?: (m: 
       <div className="flex aspect-[4/3] flex-col items-center justify-center gap-3 rounded-2xl bg-sunken p-6 text-center">
         <p className="max-w-xs text-sm text-muted">USDZ files open in AR on iPhone, but can’t be previewed here. Export as <b>GLB</b> from your scanning app for the 3D view and auto-measure.</p>
         <a rel="ar" href={src} className="rounded-full bg-ink px-4 py-2 text-sm text-paper">Open in AR</a>
+      </div>
+    );
+  }
+
+  if (!armed) {
+    return (
+      <button onClick={() => setArmed(true)} className="flex aspect-[4/3] w-full flex-col items-center justify-center gap-2 rounded-2xl bg-sunken p-6 text-center transition hover:bg-line/50">
+        <span className="rounded-full bg-ink px-5 py-2.5 text-sm font-medium text-paper">View in 3D</span>
+        <span className="text-xs text-muted">{sizeLabel ? `Loads a ${sizeLabel} model` : "Loads the 3D model"} · drag to look around</span>
+      </button>
+    );
+  }
+
+  if (failed) {
+    return (
+      <div className="flex aspect-[4/3] flex-col items-center justify-center gap-3 rounded-2xl bg-sunken p-6 text-center">
+        <p className="max-w-xs text-sm text-muted">This device couldn’t show the 3D model. It may be too heavy for the browser.</p>
+        {fallbackHref && <a href={fallbackHref} download className="rounded-full bg-ink px-4 py-2 text-sm text-paper">Download it instead</a>}
       </div>
     );
   }

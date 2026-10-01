@@ -3,7 +3,8 @@ import { RoomCard } from "@/components/RoomCard";
 import { getRoomCovers } from "@/lib/social";
 import { Card, Eyebrow } from "@/components/ui";
 import { config, money } from "@/lib/config";
-import { listItems, listRooms, listSearches } from "@/lib/store";
+import { ScanViewer } from "@/components/ScanViewer";
+import { getSetting, listItems, listRooms, listSearches } from "@/lib/store";
 
 export const dynamic = "force-dynamic";
 
@@ -13,7 +14,7 @@ const ago = (iso: string) => {
 };
 
 export default async function Home() {
-  const [rooms, items, searches] = await Promise.all([listRooms(), listItems(), listSearches(6)]);
+  const [rooms, items, searches, houseScan, originalScan] = await Promise.all([listRooms(), listItems(), listSearches(6), getSetting("house_scan"), getSetting("house_scan_original")]);
   const covers = await getRoomCovers(rooms.map((r) => r.id));
   const smsOn = Boolean(process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_FROM_NUMBER);
   const hour = new Date().getHours();
@@ -54,6 +55,17 @@ export default async function Home() {
           ))}
         </Card>
       </section>
+
+      {/* The house in 3D */}
+      {houseScan && (
+        <section>
+          <div className="mb-4 flex items-end justify-between">
+            <h2 className="font-display text-2xl">The house in 3D</h2>
+            <Link href="/movein" className="text-sm text-muted hover:text-ink">Move-in record →</Link>
+          </div>
+          <ScanViewer src={`/api/files/${houseScan}`} lazy sizeLabel="12 MB" fallbackHref={`/api/files/${originalScan ?? houseScan}`} />
+        </section>
+      )}
 
       {/* Rooms */}
       <section>

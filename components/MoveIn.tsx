@@ -9,13 +9,13 @@ import { Button, Card } from "./ui";
 
 type RoomRef = { id: string; name: string };
 
-export function MoveIn({ rooms, photos, readings, houseScan, floorPlans }: { rooms: RoomRef[]; photos: RoomPhoto[]; readings: MeterReading[]; houseScan: string | null; floorPlans: { file: string; label: string }[] }) {
+export function MoveIn({ rooms, photos, readings, houseScan, originalScan, floorPlans }: { rooms: RoomRef[]; photos: RoomPhoto[]; readings: MeterReading[]; houseScan: string | null; originalScan: string | null; floorPlans: { file: string; label: string }[] }) {
   return (
     <>
       <Meters readings={readings} />
       <BarePhotos rooms={rooms} photos={photos} />
       <FloorPlans plans={floorPlans} />
-      <HouseScan file={houseScan} />
+      <HouseScan file={houseScan} original={originalScan} />
     </>
   );
 }
@@ -354,7 +354,7 @@ function History({ readings }: { readings: MeterReading[] }) {
 
 // ── Whole-house 3D scan ─────────────────────────────────────────────
 
-function HouseScan({ file: initial }: { file: string | null }) {
+function HouseScan({ file: initial, original }: { file: string | null; original: string | null }) {
   const router = useRouter();
   const [file, setFile] = useState(initial);
   const [busy, setBusy] = useState(false);
@@ -398,9 +398,9 @@ function HouseScan({ file: initial }: { file: string | null }) {
       {error && <p className="mb-3 rounded-lg bg-warn-soft px-3 py-2 text-sm text-warn">{error}</p>}
       {file ? (
         <>
-          <ScanViewer src={fileUrl(file)} />
+          <ScanViewer src={fileUrl(file)} lazy sizeLabel="12 MB" fallbackHref={fileUrl(original ?? file)} />
           <p className="mt-2 flex gap-4 text-[13px] text-muted">
-            <a href={fileUrl(file)} download className="text-accent underline underline-offset-2">Download</a>
+            <a href={fileUrl(original ?? file)} download className="text-accent underline underline-offset-2">{original ? "Download full quality" : "Download"}</a>
             <button onClick={() => confirm("Remove the house scan?") && remove()} className="hover:text-warn">Remove</button>
           </p>
         </>
