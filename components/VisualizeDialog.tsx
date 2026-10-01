@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import type { Product } from "@/lib/types";
-import { uploadFile } from "@/lib/upload";
+import type { Product, RoomPhoto } from "@/lib/types";
+import { fileUrl, uploadFile } from "@/lib/upload";
 import { Button } from "./ui";
 
 /** Upload a room photo → Gemini renders the product into it. */
@@ -10,17 +10,21 @@ export function VisualizeDialog({ product, onClose }: { product: Product | null;
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [bare, setBare] = useState<RoomPhoto[]>([]);
 
   useEffect(() => {
-    if (product) { setResult(null); setError(null); ref.current?.showModal(); }
-    else ref.current?.close();
+    if (product) {
+      setResult(null); setError(null); ref.current?.showModal();
+      fetch("/api/photos?kind=movein").then((r) => (r.ok ? r.json() : [])).then(setBare).catch(() => setBare([]));
+    } else ref.current?.close();
   }, [product]);
 
-  async function run(file: File) {
+  /** `source` is a new upload, or the stored name of a bare move-in photo. */
+  async function run(source: File | string) {
     if (!product) return;
     setBusy(true); setError(null);
     try {
-      const roomFile = await uploadFile(file);
+      const roomFile = typeof source === "string" ? source : await uploadFile(source);
       const res = await fetch("/api/visualize", {
         method: "POST", headers: { "content-type": "application/json" },
         body: JSON.stringify({ roomFile, productImage: product.image_url, description: `${product.title}${product.width_cm ? `, ${product.width_cm} cm wide` : ""}` }),
@@ -48,11 +52,26 @@ export function VisualizeDialog({ product, onClose }: { product: Product | null;
         {result ? (
           <img src={result} alt="Preview of the item in your room" className="w-full rounded-xl" />
         ) : (
+          <>
+          {bare.length > 0 && (
+            <div>
+              <p className="mb-2 text-[13px] font-medium">Start from a bare room photo</p>
+              <div className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:thin]">
+                {bare.map((p) => (
+                  <button key={p.id} disabled={busy} onClick={() => run(p.file)} className="aspect-[4/3] w-28 shrink-0 overflow-hidden rounded-lg bg-sunken ring-accent hover:ring-2 disabled:opacity-60">
+                    <img src={fileUrl(p.file)} alt="Bare room on move-in day" className="size-full object-cover" />
+                  </button>
+                ))}
+              </div>
+              <p className="mt-3 text-[13px] text-muted">…or upload a different photo:</p>
+            </div>
+          )}
           <label className={`flex cursor-pointer flex-col items-center gap-2 rounded-xl border-2 border-dashed border-line px-4 py-10 text-center ${busy ? "opacity-60" : "hover:bg-sunken/60"}`}>
             <span className="text-sm font-medium">{busy ? "Rendering… (15–30s)" : "Upload a photo of the spot"}</span>
             <span className="text-xs text-muted">Gemini will place the item in it, matching light and perspective</span>
             <input type="file" accept="image/*" hidden disabled={busy} onChange={(e) => e.target.files?.[0] && run(e.target.files[0])} />
           </label>
+          </>
         )}
         {error && <p className="rounded-lg bg-warn-soft px-3 py-2 text-sm text-warn">{error}</p>}
         {result && <Button variant="ghost" onClick={() => setResult(null)}>Try another photo</Button>}

@@ -93,8 +93,27 @@ export type Item = Product & {
   addedAt: string;
 };
 
-/** A photo of the room itself, as it is now. */
-export type RoomPhoto = { id: string; roomId: string; file: string; caption: string; addedBy: string | null; addedAt: string };
+/** "now" = the room as it is today; "movein" = the bare room on move-in day, the base for furniture previews. */
+export type PhotoKind = "now" | "movein";
+
+/** A photo of the room itself. */
+export type RoomPhoto = { id: string; roomId: string; file: string; caption: string; kind: PhotoKind; addedBy: string | null; addedAt: string };
+
+export type MeterType = "electric" | "gas" | "water" | "other";
+
+export const METER_TYPES: { value: MeterType; label: string; unit: string }[] = [
+  { value: "electric", label: "Electricity", unit: "kWh" },
+  { value: "gas", label: "Gas", unit: "m³" },
+  { value: "water", label: "Water", unit: "m³" },
+  { value: "other", label: "Other", unit: "" },
+];
+
+/** A meter reading, usually taken on move-in day, with a photo of the dial as proof. */
+export type MeterReading = {
+  id: string; meter: MeterType; label: string; reading: string; unit: string; photo: string | null;
+  takenOn: string; // YYYY-MM-DD
+  notes: string; addedBy: string | null; addedAt: string;
+};
 
 export type Comment = { id: string; itemId: string; author: string; body: string; createdAt: string };
 

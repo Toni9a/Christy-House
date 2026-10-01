@@ -14,7 +14,7 @@ export default async function RoomPage({ params }: { params: Promise<{ id: strin
   const { id } = await params;
   const room = await getRoom(id);
   if (!room) notFound();
-  const [items, rooms, photos, social] = await Promise.all([listItems(id), listRooms(), listRoomPhotos(id), getSocial()]);
+  const [items, rooms, photos, social] = await Promise.all([listItems(id), listRooms(), listRoomPhotos(id, "now"), getSocial()]);
   const { width, depth, height } = room.dims;
 
   return (

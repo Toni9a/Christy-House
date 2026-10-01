@@ -1,7 +1,7 @@
 import "server-only";
 import postgres from "postgres";
 import { get, put } from "@vercel/blob";
-import type { Comment, Item, Reaction, Room, RoomPhoto, Search } from "../types";
+import type { Comment, Item, MeterReading, PhotoKind, Reaction, Room, RoomPhoto, Search } from "../types";
 import { jsonStore } from "./json";
 import { SCHEMA } from "./schema";
 import type { Store } from "./types";
@@ -66,7 +66,12 @@ const itemCols = (i: Partial<Item>) => strip({
   match_score: i.match_score, why: i.why, notes: i.notes, added_by: i.addedBy,
 });
 
-const toPhoto = (r: Row): RoomPhoto => ({ id: r.id, roomId: r.room_id, file: r.file, caption: r.caption, addedBy: r.added_by, addedAt: iso(r.added_at) });
+const toPhoto = (r: Row): RoomPhoto => ({ id: r.id, roomId: r.room_id, file: r.file, caption: r.caption, kind: r.kind as PhotoKind, addedBy: r.added_by, addedAt: iso(r.added_at) });
+const toMeter = (r: Row): MeterReading => ({
+  id: r.id, meter: r.meter, label: r.label, reading: r.reading, unit: r.unit, photo: r.photo,
+  takenOn: r.taken_on instanceof Date ? r.taken_on.toISOString().slice(0, 10) : String(r.taken_on).slice(0, 10),
+  notes: r.notes, addedBy: r.added_by, addedAt: iso(r.added_at),
+});
 const toComment = (r: Row): Comment => ({ id: r.id, itemId: r.item_id, author: r.author, body: r.body, createdAt: iso(r.created_at) });
 const toReaction = (r: Row): Reaction => ({ itemId: r.item_id, person: r.person, value: r.value });
 const toSearch = (r: Row): Search => ({ ...r.data, id: r.id, createdAt: iso(r.created_at) });
@@ -120,13 +125,29 @@ export const postgresStore: Store = {
   },
   async deleteItem(id) { const sql = await db(); await sql`delete from items where id = ${id}`; },
 
-  async listRoomPhotos(roomId) { const sql = await db(); return (await sql`select * from room_photos where room_id = ${roomId} order by added_at desc`).map(toPhoto); },
+  async listRoomPhotos(roomId, kind) {
+    const sql = await db();
+    const rows = kind
+      ? await sql`select * from room_photos where room_id = ${roomId} and kind = ${kind} order by added_at desc`
+      : await sql`select * from room_photos where room_id = ${roomId} order by added_at desc`;
+    return rows.map(toPhoto);
+  },
+  async listPhotosByKind(kind) { const sql = await db(); return (await sql`select * from room_photos where kind = ${kind} order by added_at desc`).map(toPhoto); },
   async addRoomPhoto(p) {
     const sql = await db();
-    const [row] = await sql`insert into room_photos (id, room_id, file, caption, added_by) values (${newId()}, ${p.roomId}, ${p.file}, ${p.caption}, ${p.addedBy}) returning *`;
+    const [row] = await sql`insert into room_photos (id, room_id, file, caption, kind, added_by) values (${newId()}, ${p.roomId}, ${p.file}, ${p.caption}, ${p.kind}, ${p.addedBy}) returning *`;
     return toPhoto(row);
   },
   async deleteRoomPhoto(id) { const sql = await db(); await sql`delete from room_photos where id = ${id}`; },
+
+  async listMeterReadings() { const sql = await db(); return (await sql`select * from meter_readings order by taken_on desc, added_at desc`).map(toMeter); },
+  async addMeterReading(m) {
+    const sql = await db();
+    const [row] = await sql`insert into meter_readings (id, meter, label, reading, unit, photo, taken_on, notes, added_by)
+      values (${newId()}, ${m.meter}, ${m.label}, ${m.reading}, ${m.unit}, ${m.photo}, ${m.takenOn}, ${m.notes}, ${m.addedBy}) returning *`;
+    return toMeter(row);
+  },
+  async deleteMeterReading(id) { const sql = await db(); await sql`delete from meter_readings where id = ${id}`; },
 
   async listComments(itemId) { const sql = await db(); return (await sql`select * from comments where item_id = ${itemId} order by created_at`).map(toComment); },
   async commentCounts() {

@@ -44,6 +44,20 @@ create table if not exists room_photos (
   added_at    timestamptz not null default now()
 );
 create index if not exists room_photos_room_idx on room_photos(room_id);
+alter table room_photos add column if not exists kind text not null default 'now';
+
+create table if not exists meter_readings (
+  id          text primary key,
+  meter       text not null,
+  label       text not null default '',
+  reading     text not null,
+  unit        text not null default '',
+  photo       text,
+  taken_on    date not null default current_date,
+  notes       text not null default '',
+  added_by    text,
+  added_at    timestamptz not null default now()
+);
 
 create table if not exists comments (
   id          text primary key,

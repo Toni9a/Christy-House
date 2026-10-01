@@ -14,7 +14,8 @@ export const directUploads = usingDatabase && usingBlob();
 export const {
   listRooms, getRoom, createRoom, updateRoom, deleteRoom,
   listItems, getItem, addItem, updateItem, deleteItem,
-  listRoomPhotos, addRoomPhoto, deleteRoomPhoto,
+  listRoomPhotos, listPhotosByKind, addRoomPhoto, deleteRoomPhoto,
+  listMeterReadings, addMeterReading, deleteMeterReading,
   listComments, commentCounts, addComment, deleteComment,
   listReactions, setReaction,
   listSearches, getSearch, createSearch, updateSearch,

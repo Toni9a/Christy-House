@@ -1,7 +1,7 @@
 import "server-only";
 import { promises as fs } from "fs";
 import path from "path";
-import type { Comment, Item, Reaction, Room, RoomPhoto, Search } from "../types";
+import type { Comment, Item, MeterReading, Reaction, Room, RoomPhoto, Search } from "../types";
 import type { Store } from "./types";
 import { contentTypeOf, fileName, newId, STARTER_ROOMS } from "./util";
 
@@ -13,10 +13,10 @@ const DB_FILE = path.join(DATA_DIR, "db.json");
 const UPLOAD_DIR = path.join(DATA_DIR, "uploads");
 
 type DB = {
-  rooms: Room[]; items: Item[]; roomPhotos: RoomPhoto[]; comments: Comment[]; reactions: Reaction[]; searches: Search[];
+  rooms: Room[]; items: Item[]; roomPhotos: RoomPhoto[]; meterReadings: MeterReading[]; comments: Comment[]; reactions: Reaction[]; searches: Search[];
   seeded?: boolean;
 };
-const empty = (): DB => ({ rooms: [], items: [], roomPhotos: [], comments: [], reactions: [], searches: [] });
+const empty = (): DB => ({ rooms: [], items: [], roomPhotos: [], meterReadings: [], comments: [], reactions: [], searches: [] });
 
 let queue: Promise<unknown> = Promise.resolve();
 
@@ -103,9 +103,15 @@ export const jsonStore: Store = {
     db.reactions = db.reactions.filter((r) => r.itemId !== id);
   }),
 
-  listRoomPhotos: async (roomId) => (await read()).roomPhotos.filter((p) => p.roomId === roomId).sort(byNewest("addedAt")),
+  // Photos saved before "kind" existed count as "now".
+  listRoomPhotos: async (roomId, kind) => (await read()).roomPhotos.filter((p) => p.roomId === roomId && (!kind || (p.kind ?? "now") === kind)).sort(byNewest("addedAt")),
+  listPhotosByKind: async (kind) => (await read()).roomPhotos.filter((p) => (p.kind ?? "now") === kind).sort(byNewest("addedAt")),
   addRoomPhoto: (p) => mutate((db) => { const photo = { ...p, id: newId(), addedAt: now() }; db.roomPhotos.push(photo); return photo; }),
   deleteRoomPhoto: (id) => mutate((db) => { db.roomPhotos = db.roomPhotos.filter((p) => p.id !== id); }),
+
+  listMeterReadings: async () => (await read()).meterReadings.slice().sort((a, b) => b.takenOn.localeCompare(a.takenOn) || b.addedAt.localeCompare(a.addedAt)),
+  addMeterReading: (m) => mutate((db) => { const r = { ...m, id: newId(), addedAt: now() }; db.meterReadings.push(r); return r; }),
+  deleteMeterReading: (id) => mutate((db) => { db.meterReadings = db.meterReadings.filter((m) => m.id !== id); }),
 
   listComments: async (itemId) => (await read()).comments.filter((c) => c.itemId === itemId).sort((a, b) => a.createdAt.localeCompare(b.createdAt)),
   commentCounts: async () => {

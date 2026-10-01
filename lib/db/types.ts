@@ -1,4 +1,4 @@
-import type { Comment, Item, Reaction, ReactionValue, Room, RoomPhoto, Search } from "../types";
+import type { Comment, Item, MeterReading, PhotoKind, Reaction, ReactionValue, Room, RoomPhoto, Search } from "../types";
 
 type New<T, K extends keyof T = never> = Omit<T, "id" | K>;
 
@@ -19,9 +19,16 @@ export interface Store {
   updateItem(id: string, patch: Partial<Item>): Promise<Item | null>;
   deleteItem(id: string): Promise<void>;
 
-  listRoomPhotos(roomId: string): Promise<RoomPhoto[]>;
+  /** A room's photos, newest first; `kind` narrows to "now" or "movein" photos. */
+  listRoomPhotos(roomId: string, kind?: PhotoKind): Promise<RoomPhoto[]>;
+  /** Every photo of one kind across all rooms. */
+  listPhotosByKind(kind: PhotoKind): Promise<RoomPhoto[]>;
   addRoomPhoto(p: New<RoomPhoto, "addedAt">): Promise<RoomPhoto>;
   deleteRoomPhoto(id: string): Promise<void>;
+
+  listMeterReadings(): Promise<MeterReading[]>;
+  addMeterReading(m: New<MeterReading, "addedAt">): Promise<MeterReading>;
+  deleteMeterReading(id: string): Promise<void>;
 
   listComments(itemId: string): Promise<Comment[]>;
   commentCounts(): Promise<Record<string, number>>;
