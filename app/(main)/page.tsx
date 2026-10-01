@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { RoomCard } from "@/components/RoomCard";
 import { getRoomCovers } from "@/lib/social";
-import { Card, Eyebrow } from "@/components/ui";
+import { Card } from "@/components/ui";
 import { config, money } from "@/lib/config";
 import { ScanViewer } from "@/components/ScanViewer";
 import { getSetting, listItems, listRooms, listSearches } from "@/lib/store";
@@ -26,23 +26,29 @@ export default async function Home() {
 
   return (
     <div className="space-y-12">
-      {/* Hero */}
-      <section className="grid gap-6 lg:grid-cols-[1.4fr_1fr]">
-        <div className="flex flex-col justify-end">
-          <Eyebrow>{greeting}</Eyebrow>
-          <h1 className="font-display text-5xl leading-[1.02] tracking-tight sm:text-7xl">
-            {houseFirst}<span className="italic text-accent">{houseLast}</span>
-          </h1>
-          <p className="mt-5 max-w-md text-[15px] leading-relaxed text-muted">
-            Every room, everything in it, and everything you’re after. Send a photo or link of anything you like and get real listings at your price — that actually fit.
-          </p>
-          <div className="mt-7 flex flex-wrap gap-3">
-            <Link href="/find" className="rounded-xl bg-accent px-5 py-3 text-sm font-medium text-accent-ink transition hover:brightness-110">Find something</Link>
-            <Link href="/items" className="rounded-xl border border-line bg-surface px-5 py-3 text-sm font-medium transition hover:bg-sunken">All items</Link>
+      {/* Hero: the front of the house */}
+      <section className="space-y-4">
+        <div className="relative isolate flex min-h-[26rem] items-end overflow-hidden rounded-3xl bg-sunken sm:min-h-[34rem]">
+          <img src="/home/front.webp" srcSet="/home/front-sm.webp 1000w, /home/front.webp 2000w" sizes="(min-width: 1152px) 1152px, 100vw"
+            alt="The front of Christy’s House: a red-brick semi with a white porch and a bay window, seen from the lawn"
+            className="absolute inset-0 -z-10 size-full object-cover object-[center_30%]" />
+          <div className="absolute inset-0 -z-10 bg-gradient-to-t from-black/75 via-black/15 to-transparent sm:bg-gradient-to-tr sm:from-black/75 sm:via-black/20 sm:to-transparent" />
+          <div className="p-6 text-white sm:p-10">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-white/80">{greeting}</p>
+            <h1 className="mt-2 font-display text-5xl leading-[1.02] tracking-tight sm:text-7xl">
+              {houseFirst}<span className="italic">{houseLast}</span>
+            </h1>
+            <p className="mt-4 max-w-md text-[15px] leading-relaxed text-white/85">
+              Every room, everything in it, and everything you’re after. Send a photo or link of anything you like and get real listings at your price, that actually fit.
+            </p>
+            <div className="mt-6 flex flex-wrap gap-3">
+              <Link href="/find" className="rounded-xl bg-accent px-5 py-3 text-sm font-medium text-accent-ink transition hover:brightness-110">Find something</Link>
+              <Link href="/items" className="rounded-xl border border-white/40 bg-white/15 px-5 py-3 text-sm font-medium text-white backdrop-blur transition hover:bg-white/25">All items</Link>
+            </div>
           </div>
         </div>
 
-        <Card className="grid grid-cols-3 divide-x divide-line self-end">
+        <Card className="grid grid-cols-3 divide-x divide-line">
           {[
             [rooms.length, "rooms"],
             [items.length, "items"],
