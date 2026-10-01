@@ -8,6 +8,14 @@ import { Button, Card, Label, inputCls } from "./ui";
 
 export const ROOM_KINDS = ["living", "bedroom", "kitchen", "dining", "office", "bathroom", "hallway", "outdoor", "other"];
 
+const metres = (cm: number) => `${(cm / 100).toFixed(2).replace(/0$/, "")} m`;
+/** "3.8 × 4.6 m · 2.45 m ceiling", from whatever sizes are filled in. */
+function sizeLabel(d: Room["dims"]) {
+  const size = d.width && d.depth ? `${metres(d.width)} × ${metres(d.depth)}` : "";
+  const ceiling = d.height ? `${metres(d.height)} ceiling` : "";
+  return [size, ceiling].filter(Boolean).join(" · ") || undefined;
+}
+
 export function RoomEditor({ room }: { room: Room }) {
   const router = useRouter();
   const [draft, setDraft] = useState(room);
@@ -56,7 +64,7 @@ export function RoomEditor({ room }: { room: Room }) {
     <div className="grid gap-6 lg:grid-cols-[1.3fr_1fr]">
       <Card className="p-4">
         {draft.scanFile ? (
-          <ScanViewer src={`/api/files/${draft.scanFile}`} onMeasured={onMeasured} />
+          <ScanViewer src={`/api/files/${draft.scanFile}`} onMeasured={onMeasured} iso label={sizeLabel(draft.dims)} />
         ) : (
           <div className="flex aspect-[4/3] flex-col items-center justify-center gap-2 rounded-2xl bg-sunken p-6 text-center">
             <p className="font-display text-xl">No scan yet</p>
@@ -68,7 +76,7 @@ export function RoomEditor({ room }: { room: Room }) {
             {uploading ? "Uploading…" : draft.scanFile ? "Replace scan" : "Upload scan"}
             <input type="file" hidden accept=".glb,.gltf,.usdz,.obj" disabled={uploading} onChange={(e) => e.target.files?.[0] && upload(e.target.files[0])} />
           </label>
-          {measured && (
+          {measured && !draft.dims.width && !draft.dims.depth && (
             <Button type="button" variant="quiet" onClick={() => setDraft((d) => ({ ...d, dims: measured }))}>
               Use scan measurements ({measured.width}×{measured.depth} cm)
             </Button>

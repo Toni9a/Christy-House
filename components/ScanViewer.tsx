@@ -6,7 +6,7 @@ declare module "react" {
     interface IntrinsicElements {
       "model-viewer": React.DetailedHTMLProps<React.HTMLAttributes<HTMLElement>, HTMLElement> & {
         src?: string; "ios-src"?: string; ar?: boolean; "camera-controls"?: boolean; "shadow-intensity"?: string;
-        exposure?: string; "camera-orbit"?: string; "interaction-prompt"?: string;
+        exposure?: string; "camera-orbit"?: string; "interaction-prompt"?: string; "field-of-view"?: string;
       };
     }
   }
@@ -19,8 +19,12 @@ export type Measured = { width: number; depth: number; height: number };
  * Renders a LiDAR export (GLB from Polycam / 3D Scanner App / RoomPlan→GLB) and
  * reads its bounding box. Scans are in metres; we report centimetres.
  */
-export function ScanViewer({ src, onMeasured, lazy = false, sizeLabel, fallbackHref }: {
+export function ScanViewer({ src, onMeasured, lazy = false, sizeLabel, fallbackHref, iso = false, label }: {
   src: string; onMeasured?: (m: Measured) => void;
+  /** Dollhouse view from a corner with a narrow lens, so it reads like an isometric drawing. */
+  iso?: boolean;
+  /** Shown over the model instead of the scan's own bounding box, e.g. the room's real size. */
+  label?: string;
   /** Wait for a tap before downloading and drawing the model. Kinder to phones. */
   lazy?: boolean; sizeLabel?: string; fallbackHref?: string;
 }) {
@@ -82,12 +86,14 @@ export function ScanViewer({ src, onMeasured, lazy = false, sizeLabel, fallbackH
     <div className="relative aspect-[4/3] overflow-hidden rounded-2xl bg-sunken">
       {ready ? (
         <model-viewer ref={ref} src={src} camera-controls shadow-intensity="0.6" exposure="1.05"
-          camera-orbit="30deg 60deg auto" interaction-prompt="none"
+          camera-orbit={iso ? "40deg 52deg auto" : "30deg 60deg auto"} field-of-view={iso ? "18deg" : undefined} interaction-prompt="none"
           style={{ display: "block", width: "100%", height: "100%", background: "transparent", "--progress-bar-height": "0px" } as React.CSSProperties} />
       ) : (
         <div className="shimmer size-full" />
       )}
-      {dims && (
+      {label ? (
+        <div className="pointer-events-none absolute bottom-3 left-3 rounded-lg bg-surface/90 px-3 py-1.5 text-xs tabular-nums backdrop-blur">{label}</div>
+      ) : dims && (
         <div className="pointer-events-none absolute bottom-3 left-3 rounded-lg bg-surface/90 px-3 py-1.5 text-xs tabular-nums backdrop-blur">
           Scan bounds · {dims.width} × {dims.depth} cm · {dims.height} cm high
         </div>
