@@ -3,7 +3,6 @@ import { RoomCard } from "@/components/RoomCard";
 import { getRoomCovers } from "@/lib/social";
 import { Card, Eyebrow } from "@/components/ui";
 import { config, money } from "@/lib/config";
-import { valuation } from "@/lib/valuation";
 import { listItems, listRooms, listSearches } from "@/lib/store";
 
 export const dynamic = "force-dynamic";
@@ -42,16 +41,7 @@ export default async function Home() {
           </div>
         </div>
 
-        <div className="space-y-3 self-end">
-        <Link href="/value" className="group flex items-center gap-4 rounded-2xl border border-line bg-surface p-3 pr-5 transition hover:border-faint">
-          <img src="/valuation/hero.webp" alt="" className="size-16 shrink-0 rounded-xl object-cover object-[center_30%]" />
-          <div className="min-w-0 flex-1">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted">{valuation.address} · estimated value</p>
-            <p className="font-display text-3xl tabular-nums group-hover:text-accent">{money(valuation.estimate, "GBP")}</p>
-          </div>
-          <span className="text-muted group-hover:text-accent">→</span>
-        </Link>
-        <Card className="grid grid-cols-3 divide-x divide-line">
+        <Card className="grid grid-cols-3 divide-x divide-line self-end">
           {[
             [rooms.length, "rooms"],
             [items.length, "items"],
@@ -63,7 +53,6 @@ export default async function Home() {
             </div>
           ))}
         </Card>
-        </div>
       </section>
 
       {/* Rooms */}
