@@ -132,8 +132,8 @@ function Meters({ readings: initial }: { readings: MeterReading[] }) {
                 </div>
               ) : (
                 <label className="inline-block cursor-pointer rounded-xl border border-dashed border-line px-4 py-3 text-sm text-muted hover:bg-sunken/60">
-                  Take or choose a photo
-                  <input type="file" accept="image/*" capture="environment" hidden onChange={(e) => choosePhoto(e.target.files?.[0] ?? null)} />
+                  Take a photo or choose one
+                  <input type="file" accept="image/*" hidden onChange={(e) => choosePhoto(e.target.files?.[0] ?? null)} />
                 </label>
               )}
               {reading_ && <p className="mt-2 rounded-lg bg-sunken px-3 py-2 text-[13px] text-muted">{reading_}</p>}
