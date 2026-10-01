@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "models": "node scripts/build-room-models.mjs"
   },
   "dependencies": {
     "@google/model-viewer": "^4.3.1",
@@ -19,6 +20,7 @@
     "zod": "^4.6.5"
   },
   "devDependencies": {
+    "@gltf-transform/core": "^4.5.1",
     "@tailwindcss/postcss": "^4.3.3",
     "@types/node": "^26.6.3",
     "@types/react": "^19.3.0",

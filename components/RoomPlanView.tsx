@@ -1,11 +1,12 @@
 "use client";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { PlanOpening, RoomPlan } from "@/lib/room-plans";
 
 const m = (n: number) => `${n.toFixed(2)} m`;
 const letter = (i: number) => String.fromCharCode(65 + i);
 const WINDOW = "#3b82c4";
 const PAD = 0.75; // metres of margin around the outline, for the labels
+const T3 = 0.12, DIM3 = 0.32; // wall thickness and dimension-line offset used when the 3D models are built (scripts/build-room-models.mjs)
 
 type Sel = { kind: "wall"; i: number } | { kind: "open"; i: number; j: number } | null;
 
@@ -22,8 +23,13 @@ function inside(p: [number, number], poly: [number, number][]) {
  * An annotated plan of one room: every wall lettered and measured, doors and windows marked, fixed units hatched.
  * Tap a wall or an opening to see its numbers (length, height, wall area, sill and head).
  */
-export function RoomPlanView({ plan, roomName }: { plan: RoomPlan; roomName: string }) {
+export function RoomPlanView({ plan, roomId, roomName }: { plan: RoomPlan; roomId: string; roomName: string }) {
   const [sel, setSel] = useState<Sel>(null);
+  const [mode, setMode] = useState<"3d" | "flat">("3d");
+  const [ready, setReady] = useState(false);
+  useEffect(() => {
+    if (mode === "3d") import("@google/model-viewer").then(() => setReady(true)).catch(() => setMode("flat"));
+  }, [mode]);
   const pts = plan.points;
 
   const geo = useMemo(() => pts.map((a, i) => {
@@ -60,7 +66,59 @@ export function RoomPlanView({ plan, roomName }: { plan: RoomPlan; roomName: str
         <span>Longest {m(plan.depth)} × {m(plan.width)}</span>
       </div>
 
-      <svg viewBox={`${-PAD} ${-PAD} ${W} ${H}`} className="w-full select-none rounded-2xl bg-sunken text-ink" role="img"
+      <div className="mb-3 inline-flex rounded-full border border-line p-0.5 text-[13px]">
+        {([["3d", "3D"], ["flat", "Flat plan"]] as const).map(([v, l]) => (
+          <button key={v} onClick={() => setMode(v)} aria-pressed={mode === v}
+            className={`rounded-full px-3.5 py-1 transition ${mode === v ? "bg-ink text-paper" : "text-muted hover:text-ink"}`}>{l}</button>
+        ))}
+      </div>
+
+      {mode === "3d" && (
+        <div className="relative aspect-[4/3] overflow-hidden rounded-2xl bg-sunken" onClick={() => setSel(null)}>
+          {ready ? (
+            <model-viewer src={`/models/room-${roomId}.glb`} camera-controls shadow-intensity="0.5" exposure="1.1" interaction-prompt="none"
+              camera-orbit="35deg 38deg 100%" field-of-view="20deg"
+              style={{ display: "block", width: "100%", height: "100%", background: "transparent", "--progress-bar-height": "0px" } as React.CSSProperties}>
+              {geo.map((g, i) => {
+                const short = g.len < 0.9, on = sel?.kind === "wall" && sel.i === i;
+                const pos = `${g.mid[0] + g.n[0] * (T3 + DIM3)} ${plan.ceiling + 0.12} ${g.mid[1] + g.n[1] * (T3 + DIM3)}`;
+                return (
+                  <button key={`w${i}`} slot={`hotspot-w${i}`} data-position={pos} data-visibility-attribute="visible"
+                    onClick={(e) => { e.stopPropagation(); setSel({ kind: "wall", i }); }}
+                    className={`rounded-full border px-2 py-0.5 text-[11px] font-medium tabular-nums shadow-sm ${on ? "border-accent bg-accent text-accent-ink" : "border-line bg-surface text-ink"}`}>
+                    {short ? letter(i) : `${letter(i)} ${plan.edges[i].length.toFixed(2)}`}
+                  </button>
+                );
+              })}
+              {plan.edges.flatMap((e, i) => e.openings.map((o, j) => {
+                const mid = (o.from + o.to) / 2, sill = o.kind === "window" ? o.sill ?? 0.9 : 0;
+                const head = o.head ?? Math.max(sill + 0.8, plan.ceiling - 0.35);
+                const x = geo[i].a[0] + geo[i].d[0] * mid + geo[i].n[0] * (T3 + 0.03), z = geo[i].a[1] + geo[i].d[1] * mid + geo[i].n[1] * (T3 + 0.03);
+                const on = sel?.kind === "open" && sel.i === i && sel.j === j;
+                return (
+                  <button key={`o${i}-${j}`} slot={`hotspot-o${i}-${j}`} data-position={`${x} ${(sill + head) / 2} ${z}`} data-visibility-attribute="visible"
+                    onClick={(ev) => { ev.stopPropagation(); setSel({ kind: "open", i, j }); }}
+                    className={`rounded-full border px-1.5 py-0.5 text-[10px] tabular-nums shadow-sm ${on ? "border-accent bg-accent text-accent-ink" : "bg-surface"}`}
+                    style={on ? undefined : { borderColor: o.kind === "window" ? WINDOW : "var(--accent)", color: o.kind === "window" ? WINDOW : "var(--accent)" }}>
+                    {o.width.toFixed(2)}
+                  </button>
+                );
+              }))}
+              {(() => {
+                const mx = Math.max(...pts.map((p) => p[0])), mz = Math.max(...pts.map((p) => p[1]));
+                return (
+                  <button slot="hotspot-ceiling" data-position={`${mx + T3 + DIM3} ${plan.ceiling / 2} ${mz + T3 + DIM3}`} data-visibility-attribute="visible"
+                    onClick={(e) => e.stopPropagation()} className="rounded-full border border-line bg-surface px-2 py-0.5 text-[11px] font-medium tabular-nums shadow-sm">
+                    {m(plan.ceiling)} high
+                  </button>
+                );
+              })()}
+            </model-viewer>
+          ) : <div className="shimmer size-full" />}
+        </div>
+      )}
+
+      {mode === "flat" && <svg viewBox={`${-PAD} ${-PAD} ${W} ${H}`} className="w-full select-none rounded-2xl bg-sunken text-ink" role="img"
         aria-label={`Annotated plan of the ${roomName}`} style={{ maxHeight: 640 }} onClick={() => setSel(null)}>
         <defs>
           <pattern id="hatch" width="0.12" height="0.12" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
@@ -119,7 +177,7 @@ export function RoomPlanView({ plan, roomName }: { plan: RoomPlan; roomName: str
             </g>
           );
         })}
-      </svg>
+      </svg>}
 
       <div className="mt-3 min-h-[3.25rem] rounded-xl border border-line bg-surface px-4 py-3 text-sm">
         {sel?.kind === "wall" ? (() => {

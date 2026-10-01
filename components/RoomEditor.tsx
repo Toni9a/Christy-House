@@ -76,7 +76,7 @@ export function RoomEditor({ room }: { room: Room }) {
           </div>
         )}
         {plan && view === "plan" ? (
-          <RoomPlanView plan={plan} roomName={draft.name} />
+          <RoomPlanView plan={plan} roomId={room.id} roomName={draft.name} />
         ) : draft.scanFile ? (
           <ScanViewer src={`/api/files/${draft.scanFile}`} onMeasured={onMeasured} iso label={sizeLabel(draft.dims)} />
         ) : (
