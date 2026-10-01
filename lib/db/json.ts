@@ -13,10 +13,10 @@ const DB_FILE = path.join(DATA_DIR, "db.json");
 const UPLOAD_DIR = path.join(DATA_DIR, "uploads");
 
 type DB = {
-  rooms: Room[]; items: Item[]; roomPhotos: RoomPhoto[]; meterReadings: MeterReading[]; comments: Comment[]; reactions: Reaction[]; searches: Search[];
+  rooms: Room[]; items: Item[]; roomPhotos: RoomPhoto[]; meterReadings: MeterReading[]; settings: Record<string, string>; comments: Comment[]; reactions: Reaction[]; searches: Search[];
   seeded?: boolean;
 };
-const empty = (): DB => ({ rooms: [], items: [], roomPhotos: [], meterReadings: [], comments: [], reactions: [], searches: [] });
+const empty = (): DB => ({ rooms: [], items: [], roomPhotos: [], meterReadings: [], settings: {}, comments: [], reactions: [], searches: [] });
 
 let queue: Promise<unknown> = Promise.resolve();
 
@@ -132,6 +132,9 @@ export const jsonStore: Store = {
   getSearch: async (id) => (await read()).searches.find((s) => s.id === id) ?? null,
   createSearch: (s) => mutate((db) => { const out = { ...s, id: newId(), createdAt: now() }; db.searches.push(out); return out; }),
   updateSearch: (id, patch) => mutate((db) => patchOne(db.searches, id, patch)),
+
+  getSetting: async (key) => (await read()).settings[key] ?? null,
+  setSetting: (key, value) => mutate((db) => { if (value == null) delete db.settings[key]; else db.settings[key] = value; }),
 
   async putFile(data, ext) {
     await fs.mkdir(UPLOAD_DIR, { recursive: true });

@@ -43,6 +43,10 @@ export interface Store {
   createSearch(s: New<Search, "createdAt">): Promise<Search>;
   updateSearch(id: string, patch: Partial<Search>): Promise<Search | null>;
 
+  /** Small house-wide values, e.g. the whole-house scan's file name. */
+  getSetting(key: string): Promise<string | null>;
+  setSetting(key: string, value: string | null): Promise<void>;
+
   /** Saves a file and returns its name. */
   putFile(data: Buffer, ext: string, contentType: string): Promise<string>;
   getFile(name: string): Promise<{ data: Buffer; contentType: string } | null>;

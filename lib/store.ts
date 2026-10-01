@@ -19,6 +19,7 @@ export const {
   listComments, commentCounts, addComment, deleteComment,
   listReactions, setReaction,
   listSearches, getSearch, createSearch, updateSearch,
+  getSetting, setSetting,
   putFile, getFile,
 } = store;
 

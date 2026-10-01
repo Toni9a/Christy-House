@@ -4,15 +4,17 @@ import { useRouter } from "next/navigation";
 import { METER_TYPES, type MeterReading, type MeterType, type RoomPhoto } from "@/lib/types";
 import { fileUrl, uploadFile } from "@/lib/upload";
 import { Avatar } from "./People";
+import { ScanViewer } from "./ScanViewer";
 import { Button, Card } from "./ui";
 
 type RoomRef = { id: string; name: string };
 
-export function MoveIn({ rooms, photos, readings }: { rooms: RoomRef[]; photos: RoomPhoto[]; readings: MeterReading[] }) {
+export function MoveIn({ rooms, photos, readings, houseScan }: { rooms: RoomRef[]; photos: RoomPhoto[]; readings: MeterReading[]; houseScan: string | null }) {
   return (
     <>
       <Meters readings={readings} />
       <BarePhotos rooms={rooms} photos={photos} />
+      <HouseScan file={houseScan} />
     </>
   );
 }
@@ -346,5 +348,64 @@ function History({ readings }: { readings: MeterReading[] }) {
       })}
       <p className="text-[13px] text-muted">Saved in the house database. <a href="/api/meters/export" className="text-accent underline underline-offset-2">Download all readings as CSV</a></p>
     </div>
+  );
+}
+
+// ── Whole-house 3D scan ─────────────────────────────────────────────
+
+function HouseScan({ file: initial }: { file: string | null }) {
+  const router = useRouter();
+  const [file, setFile] = useState(initial);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => setFile(initial), [initial]);
+
+  async function replace(f: File | null) {
+    if (!f) return;
+    setBusy(true); setError(null);
+    try {
+      const name = await uploadFile(f);
+      const res = await fetch("/api/house-scan", { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ file: name }) });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      setFile(data.file);
+      router.refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Upload failed");
+    }
+    setBusy(false);
+  }
+
+  async function remove() {
+    setFile(null);
+    await fetch("/api/house-scan", { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ file: null }) });
+    router.refresh();
+  }
+
+  return (
+    <section>
+      <div className="mb-4 flex items-end justify-between gap-3">
+        <div>
+          <h2 className="font-display text-2xl">Whole-house 3D scan</h2>
+          <p className="text-sm text-muted">The LiDAR scan of the whole house on move-in day. Drag to look around.</p>
+        </div>
+        <label className={`cursor-pointer rounded-xl border border-line bg-surface px-3.5 py-2 text-sm font-medium transition hover:bg-sunken ${busy ? "pointer-events-none opacity-60" : ""}`}>
+          {busy ? "Uploading…" : file ? "Replace scan" : "+ Upload scan"}
+          <input type="file" accept=".glb,.gltf,.usdz,model/gltf-binary" hidden onChange={(e) => { replace(e.target.files?.[0] ?? null); e.target.value = ""; }} />
+        </label>
+      </div>
+      {error && <p className="mb-3 rounded-lg bg-warn-soft px-3 py-2 text-sm text-warn">{error}</p>}
+      {file ? (
+        <>
+          <ScanViewer src={fileUrl(file)} />
+          <p className="mt-2 flex gap-4 text-[13px] text-muted">
+            <a href={fileUrl(file)} download className="text-accent underline underline-offset-2">Download</a>
+            <button onClick={() => confirm("Remove the house scan?") && remove()} className="hover:text-warn">Remove</button>
+          </p>
+        </>
+      ) : (
+        <p className="rounded-2xl border border-dashed border-line px-4 py-8 text-center text-sm text-muted">No house scan yet. Upload a GLB export from Polycam.</p>
+      )}
+    </section>
   );
 }

@@ -185,6 +185,13 @@ export const postgresStore: Store = {
     return toSearch(row);
   },
 
+  async getSetting(key) { const sql = await db(); const [r] = await sql`select value from meta where key = ${"setting:" + key}`; return r?.value ?? null; },
+  async setSetting(key, value) {
+    const sql = await db();
+    if (value == null) await sql`delete from meta where key = ${"setting:" + key}`;
+    else await sql`insert into meta (key, value) values (${"setting:" + key}, ${value}) on conflict (key) do update set value = excluded.value`;
+  },
+
   async putFile(data, ext, contentType) {
     if (!usingBlob()) return jsonStore.putFile(data, ext, contentType);
     const name = fileName(ext);
@@ -198,3 +205,11 @@ export const postgresStore: Store = {
     return { data: Buffer.from(await new Response(res.stream).arrayBuffer()), contentType: res.blob.contentType || contentTypeOf(name) };
   },
 };
+
+/** Streams a file out of Blob without buffering it, so big scans stay under the function response limit. Null when Blob isn't in use. */
+export async function streamBlob(name: string): Promise<{ stream: ReadableStream; contentType: string } | null | undefined> {
+  if (!usingBlob()) return undefined;
+  const res = await get(name, { access: blobAccess }).catch(() => null);
+  if (!res || res.statusCode !== 200) return null;
+  return { stream: res.stream, contentType: res.blob.contentType || contentTypeOf(name) };
+}
