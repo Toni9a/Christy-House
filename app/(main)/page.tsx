@@ -67,8 +67,8 @@ export default async function Home() {
       {/* Manuals */}
       <Link href="/movein#manuals" className="-mt-6 flex items-center justify-between gap-4 rounded-2xl border border-line bg-surface px-5 py-4 transition hover:bg-sunken">
         <span>
-          <span className="block font-display text-xl">Manuals &amp; how things work</span>
-          <span className="text-sm text-muted">{manualCount ? `${manualCount} saved: the boiler, the meters and more` : "The boiler, the meters and anything you might need to change"}</span>
+          <span className="block font-display text-xl">Manuals &amp; bills</span>
+          <span className="text-sm text-muted">{manualCount ? `${manualCount} saved: the boiler, the meters, the tariff and the broadband` : "The boiler, the meters, the tariff and the broadband"}</span>
         </span>
         <span aria-hidden className="text-muted">→</span>
       </Link>

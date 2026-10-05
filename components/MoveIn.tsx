@@ -108,11 +108,11 @@ function Meters({ readings: initial }: { readings: MeterReading[] }) {
   }
 
   return (
-    <section>
+    <section id="meter-readings" className="scroll-mt-24">
       <div className="mb-4 flex items-end justify-between gap-3">
         <div>
           <h2 className="font-display text-2xl">Meter readings</h2>
-          <p className="text-sm text-muted">Add a photo of each dial too, so there’s proof if a bill is ever disputed.</p>
+          <p className="text-sm text-muted">Add a photo of each dial too, so there’s proof if a bill is ever disputed. <a href="#manuals" className="text-accent hover:underline">Tariffs, bills and meter manuals ↓</a></p>
         </div>
         {!adding && <Button onClick={() => setAdding(true)}>+ Add reading</Button>}
       </div>

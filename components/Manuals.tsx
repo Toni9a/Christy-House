@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { isPdf, MANUAL_CATEGORIES, type Manual, type ManualFile } from "@/lib/manuals-types";
+import { isPdf, MANUAL_CATEGORIES, METER_LINKED, type Fact, type Manual, type ManualFile } from "@/lib/manuals-types";
 import { fileUrl, uploadFile } from "@/lib/upload";
 import { Button, Card, inputCls } from "./ui";
 
@@ -28,8 +28,8 @@ export function Manuals({ manuals: initial }: { manuals: Manual[] }) {
     <section id="manuals" className="scroll-mt-24">
       <div className="mb-4 flex items-end justify-between gap-3">
         <div>
-          <h2 className="font-display text-2xl">Manuals & how things work</h2>
-          <p className="max-w-xl text-sm text-muted">The boiler, the meters and anything else you might need to change. Photos, the manual, and a few plain steps.</p>
+          <h2 className="font-display text-2xl">Manuals & bills</h2>
+          <p className="max-w-xl text-sm text-muted">How things work and what they cost: the boiler, the meters, the energy tariff and the broadband. Photos, the manual, and the key details.</p>
         </div>
         {editing !== "new" && <Button onClick={() => setEditing("new")}>+ Add</Button>}
       </div>
@@ -47,7 +47,8 @@ export function Manuals({ manuals: initial }: { manuals: Manual[] }) {
                 ) : (
                   <article key={m.id} className="flex flex-col rounded-2xl border border-line bg-surface p-5">
                     <h4 className="font-display text-xl leading-tight">{m.title}</h4>
-                    {m.notes && <p className="mt-2 whitespace-pre-line text-sm leading-relaxed text-muted">{m.notes}</p>}
+                    {m.facts && m.facts.length > 0 && <FactList facts={m.facts} />}
+                    {m.notes && <p className="mt-3 whitespace-pre-line text-sm leading-relaxed text-muted">{m.notes}</p>}
                     {m.files.some((f) => !isPdf(f.file)) && (
                       <div className="mt-3 grid grid-cols-3 gap-2">
                         {m.files.filter((f) => !isPdf(f.file)).map((f) => (
@@ -68,7 +69,8 @@ export function Manuals({ manuals: initial }: { manuals: Manual[] }) {
                         ))}
                       </ul>
                     )}
-                    <div className="mt-auto flex gap-4 pt-4 text-[13px] text-muted">
+                    <div className="mt-auto flex flex-wrap gap-x-4 gap-y-1 pt-4 text-[13px] text-muted">
+                      {METER_LINKED.includes(m.category) && <a href="#meter-readings" className="text-accent hover:underline">Meter readings ↑</a>}
                       <button onClick={() => setEditing(m.id)} className="hover:text-ink">Edit</button>
                       <button onClick={() => confirm(`Delete “${m.title}”?`) && remove(m.id)} className="hover:text-warn">Delete</button>
                     </div>
@@ -80,8 +82,8 @@ export function Manuals({ manuals: initial }: { manuals: Manual[] }) {
         </div>
       ) : editing !== "new" && (
         <button onClick={() => setEditing("new")} className="flex w-full flex-col items-center gap-1 rounded-2xl border-2 border-dashed border-line px-6 py-10 text-center hover:bg-surface">
-          <span className="font-medium">No manuals yet</span>
-          <span className="text-sm text-muted">Add the boiler, the electricity and gas meters, with a photo and the manual</span>
+          <span className="font-medium">Nothing here yet</span>
+          <span className="text-sm text-muted">Add the boiler, the meters, the energy tariff or the broadband, with photos and the key details</span>
         </button>
       )}
 
@@ -94,11 +96,36 @@ export function Manuals({ manuals: initial }: { manuals: Manual[] }) {
   );
 }
 
+/** Labelled details. Secret values (wifi passwords) stay hidden until tapped, and can be copied. */
+function FactList({ facts }: { facts: Fact[] }) {
+  const [shown, setShown] = useState<Record<number, boolean>>({});
+  const [copied, setCopied] = useState<number | null>(null);
+  return (
+    <dl className="mt-3 divide-y divide-line rounded-xl border border-line text-sm">
+      {facts.map((f, i) => (
+        <div key={i} className="flex items-baseline justify-between gap-4 px-3.5 py-2">
+          <dt className="shrink-0 text-muted">{f.label}</dt>
+          <dd className="min-w-0 text-right tabular-nums">
+            {!f.value ? <span className="text-faint">not added yet</span> : f.secret ? (
+              <span className="inline-flex items-baseline gap-2">
+                <span className="break-all">{shown[i] ? f.value : "••••••••"}</span>
+                <button onClick={() => setShown((s) => ({ ...s, [i]: !s[i] }))} className="text-[12px] text-accent">{shown[i] ? "Hide" : "Show"}</button>
+                <button onClick={() => { navigator.clipboard?.writeText(f.value).then(() => { setCopied(i); setTimeout(() => setCopied(null), 1500); }); }} className="text-[12px] text-accent">{copied === i ? "Copied" : "Copy"}</button>
+              </span>
+            ) : <span className="break-words">{f.value}</span>}
+          </dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
 function ManualForm({ manual, onDone }: { manual?: Manual; onDone: (list: Manual[] | null) => void }) {
   const [title, setTitle] = useState(manual?.title ?? "");
   const [category, setCategory] = useState(manual?.category ?? "Boiler");
   const [notes, setNotes] = useState(manual?.notes ?? "");
   const [files, setFiles] = useState<ManualFile[]>(manual?.files ?? []);
+  const [facts, setFacts] = useState<Fact[]>(manual?.facts ?? []);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -124,7 +151,7 @@ function ManualForm({ manual, onDone }: { manual?: Manual; onDone: (list: Manual
     try {
       const res = await fetch("/api/manuals", {
         method: manual ? "PUT" : "POST", headers: { "content-type": "application/json" },
-        body: JSON.stringify({ id: manual?.id, title, category, notes, files }),
+        body: JSON.stringify({ id: manual?.id, title, category, notes, facts: facts.filter((f) => f.label.trim()), files }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
@@ -151,10 +178,24 @@ function ManualForm({ manual, onDone }: { manual?: Manual; onDone: (list: Manual
           </label>
         </div>
         <label className="block">
-          <span className="mb-1 block text-[13px] font-medium">What to do <span className="font-normal text-muted">(optional, plain steps)</span></span>
+          <span className="mb-1 block text-[13px] font-medium">Notes <span className="font-normal text-muted">(optional: steps, reminders)</span></span>
           <textarea className={`${inputCls} min-h-28`} value={notes} onChange={(e) => setNotes(e.target.value)}
             placeholder={"1. Check the pressure dial. It should sit between 1 and 1.5 bar.\n2. If it is low, open the silver loop slowly until it reaches 1.2 bar.\n3. Close it again."} />
         </label>
+        <div>
+          <span className="mb-1 block text-[13px] font-medium">Key details <span className="font-normal text-muted">(optional: prices, contract dates, wifi name and password…)</span></span>
+          <div className="space-y-2">
+            {facts.map((f, i) => (
+              <div key={i} className="grid grid-cols-[1fr_1.4fr_auto_auto] items-center gap-2">
+                <input className={inputCls} value={f.label} placeholder="Label" onChange={(e) => setFacts((c) => c.map((x, k) => k === i ? { ...x, label: e.target.value } : x))} />
+                <input className={inputCls} value={f.value} placeholder="Value" onChange={(e) => setFacts((c) => c.map((x, k) => k === i ? { ...x, value: e.target.value } : x))} />
+                <label className="flex items-center gap-1 whitespace-nowrap text-[12px] text-muted"><input type="checkbox" checked={!!f.secret} onChange={(e) => setFacts((c) => c.map((x, k) => k === i ? { ...x, secret: e.target.checked } : x))} />hide</label>
+                <button type="button" onClick={() => setFacts((c) => c.filter((_, k) => k !== i))} className="text-muted hover:text-warn" aria-label="Remove detail">✕</button>
+              </div>
+            ))}
+          </div>
+          <button type="button" onClick={() => setFacts((c) => [...c, { label: "", value: "" }])} className="mt-2 text-[13px] text-accent">+ Add a detail</button>
+        </div>
         <div>
           <span className="mb-1 block text-[13px] font-medium">Manuals and photos</span>
           {files.length > 0 && (
