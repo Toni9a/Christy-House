@@ -4,6 +4,7 @@ import { getRoomCovers } from "@/lib/social";
 import { Card } from "@/components/ui";
 import { config, money } from "@/lib/config";
 import { ScanViewer } from "@/components/ScanViewer";
+import { loadManuals } from "@/lib/manuals";
 import { getSetting, listItems, listRooms, listSearches } from "@/lib/store";
 
 export const dynamic = "force-dynamic";
@@ -16,6 +17,7 @@ const ago = (iso: string) => {
 export default async function Home() {
   const [rooms, items, searches, houseScan, originalScan] = await Promise.all([listRooms(), listItems(), listSearches(6), getSetting("house_scan"), getSetting("house_scan_original")]);
   const covers = await getRoomCovers(rooms.map((r) => r.id));
+  const manualCount = (await loadManuals()).length;
   const smsOn = Boolean(process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_FROM_NUMBER);
   const hour = new Date().getHours();
   // Italicise the last word of the house name: "Christy’s *House*".
@@ -61,6 +63,15 @@ export default async function Home() {
           ))}
         </Card>
       </section>
+
+      {/* Manuals */}
+      <Link href="/movein#manuals" className="-mt-6 flex items-center justify-between gap-4 rounded-2xl border border-line bg-surface px-5 py-4 transition hover:bg-sunken">
+        <span>
+          <span className="block font-display text-xl">Manuals &amp; how things work</span>
+          <span className="text-sm text-muted">{manualCount ? `${manualCount} saved: the boiler, the meters and more` : "The boiler, the meters and anything you might need to change"}</span>
+        </span>
+        <span aria-hidden className="text-muted">→</span>
+      </Link>
 
       {/* The house in 3D */}
       {houseScan && (

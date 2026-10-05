@@ -1,12 +1,43 @@
 "use client";
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import type { PlanOpening, RoomPlan } from "@/lib/room-plans";
+import { ROOM_PLANS, type PlanOpening, type RoomPlan } from "@/lib/room-plans";
 
 const m = (n: number) => `${n.toFixed(2)} m`;
 const letter = (i: number) => String.fromCharCode(65 + i);
 const WINDOW = "#3b82c4";
 const PAD = 0.75; // metres of margin around the outline, for the labels
 const T3 = 0.12, DIM3 = 0.32; // wall thickness and dimension-line offset used when the 3D models are built (scripts/build-room-models.mjs)
+
+/** One colour family per level, matching the walls and floor of the 3D models (scripts/build-room-models.mjs). */
+const LEVEL = {
+  0: { soft: "#f4e6cb", ink: "#7a5420", solid: "#d9a95a", floor: "#f7ecd9" },
+  1: { soft: "#e6e3f8", ink: "#4a3fa0", solid: "#8d84d6", floor: "#ecebfa" },
+} as const;
+
+/** The house as a stack of levels, with this room's level highlighted and the other rooms one tap away. */
+function LevelsKey({ roomId, level }: { roomId: string; level: 0 | 1 }) {
+  return (
+    <div className="mb-3 grid gap-1.5 text-[13px]" aria-label="Levels of the house">
+      {([1, 0] as const).map((lv) => {
+        const c = LEVEL[lv], here = lv === level;
+        const rooms = Object.entries(ROOM_PLANS).filter(([, p]) => p.level === lv);
+        return (
+          <div key={lv} className="flex items-center gap-3 rounded-xl px-3 py-2 transition"
+            style={{ background: here ? c.soft : "transparent", border: `1px solid ${here ? c.solid : "var(--line)"}`, opacity: here ? 1 : 0.8 }}>
+            <span className="size-3 shrink-0 rounded-sm" style={{ background: c.solid }} />
+            <span className="w-24 shrink-0 font-medium" style={{ color: here ? c.ink : undefined }}>{lv === 0 ? "Ground floor" : "First floor"}</span>
+            <span className="flex flex-wrap gap-x-3 gap-y-0.5">
+              {rooms.map(([id, p]) => id === roomId
+                ? <b key={id} className="font-medium" style={{ color: c.ink }}>{p.title} <span className="font-normal">(you are here)</span></b>
+                : <Link key={id} href={`/rooms/${id}`} className="text-muted underline-offset-2 hover:text-ink hover:underline">{p.title}</Link>)}
+            </span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
 type Sel = { kind: "wall"; i: number } | { kind: "open"; i: number; j: number } | null;
 
@@ -59,7 +90,9 @@ export function RoomPlanView({ plan, roomId, roomName }: { plan: RoomPlan; roomI
 
   return (
     <div>
+      <LevelsKey roomId={roomId} level={plan.level} />
       <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-[13px] tabular-nums text-muted">
+        <span className="rounded-full px-2.5 py-0.5 text-[12px] font-medium" style={{ background: LEVEL[plan.level].soft, color: LEVEL[plan.level].ink }}>{plan.levelName}</span>
         <span><b className="font-medium text-ink">{roomName}</b></span>
         <span>Ceiling {m(plan.ceiling)}</span>
         <span>Floor {plan.area.toFixed(1)} m²</span>
@@ -76,11 +109,11 @@ export function RoomPlanView({ plan, roomId, roomName }: { plan: RoomPlan; roomI
       {mode === "3d" && (
         <div className="relative aspect-[4/3] overflow-hidden rounded-2xl bg-sunken" onClick={() => setSel(null)}>
           {ready ? (
-            <model-viewer src={`/models/room-${roomId}.glb`} camera-controls shadow-intensity="0.5" exposure="1.1" interaction-prompt="none"
+            <model-viewer src={`/models/room-${roomId}.glb`} camera-controls shadow-intensity="1" shadow-softness="0.7" exposure="1" interaction-prompt="none"
               camera-orbit="35deg 38deg 100%" field-of-view="20deg"
               style={{ display: "block", width: "100%", height: "100%", background: "transparent", "--progress-bar-height": "0px" } as React.CSSProperties}>
               {geo.map((g, i) => {
-                const short = g.len < 0.9, on = sel?.kind === "wall" && sel.i === i;
+                const short = g.len < 1.1, on = sel?.kind === "wall" && sel.i === i;
                 const pos = `${g.mid[0] + g.n[0] * (T3 + DIM3)} ${plan.ceiling + 0.12} ${g.mid[1] + g.n[1] * (T3 + DIM3)}`;
                 return (
                   <button key={`w${i}`} slot={`hotspot-w${i}`} data-position={pos} data-visibility-attribute="visible"
@@ -126,7 +159,7 @@ export function RoomPlanView({ plan, roomId, roomName }: { plan: RoomPlan; roomI
           </pattern>
         </defs>
 
-        <polygon points={pts.map((p) => p.join(",")).join(" ")} fill="var(--surface)" />
+        <polygon points={pts.map((p) => p.join(",")).join(" ")} fill={LEVEL[plan.level].floor} />
         {plan.obstacles.map((o, k) => (
           <g key={k}>
             <rect x={o.x} y={o.y} width={o.w} height={o.h} fill="url(#hatch)" stroke="currentColor" strokeOpacity="0.5" strokeWidth="0.015" />

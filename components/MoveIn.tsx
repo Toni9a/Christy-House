@@ -9,10 +9,12 @@ import { Button, Card } from "./ui";
 
 type RoomRef = { id: string; name: string };
 
-export function MoveIn({ rooms, photos, readings, houseScan, originalScan, floorPlans }: { rooms: RoomRef[]; photos: RoomPhoto[]; readings: MeterReading[]; houseScan: string | null; originalScan: string | null; floorPlans: { file: string; label: string }[] }) {
+export function MoveIn({ rooms, photos, readings, houseScan, originalScan, floorPlans, afterMeters }: {
+  afterMeters?: React.ReactNode; rooms: RoomRef[]; photos: RoomPhoto[]; readings: MeterReading[]; houseScan: string | null; originalScan: string | null; floorPlans: { file: string; label: string }[] }) {
   return (
     <>
       <Meters readings={readings} />
+      {afterMeters}
       <BarePhotos rooms={rooms} photos={photos} />
       <FloorPlans plans={floorPlans} />
       <HouseScan file={houseScan} original={originalScan} />

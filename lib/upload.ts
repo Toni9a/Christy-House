@@ -32,7 +32,7 @@ export async function uploadFile(file: File): Promise<string> {
 }
 
 const contentTypeFor = (ext: string) =>
-  ({ glb: "model/gltf-binary", gltf: "model/gltf+json", usdz: "model/vnd.usdz+zip", png: "image/png", gif: "image/gif", heic: "image/heic" })[ext] ?? "application/octet-stream";
+  ({ pdf: "application/pdf", glb: "model/gltf-binary", gltf: "model/gltf+json", usdz: "model/vnd.usdz+zip", png: "image/png", gif: "image/gif", heic: "image/heic" })[ext] ?? "application/octet-stream";
 
 async function shrink(file: File, max = 2000): Promise<Blob> {
   try {

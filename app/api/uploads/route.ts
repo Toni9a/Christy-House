@@ -2,7 +2,7 @@ import { bad } from "@/lib/http";
 import { fileName } from "@/lib/db/util";
 import { directUploads } from "@/lib/store";
 
-const ALLOWED = ["jpg", "jpeg", "png", "webp", "gif", "heic", "glb", "gltf", "usdz", "obj"];
+const ALLOWED = ["jpg", "jpeg", "png", "webp", "gif", "heic", "pdf", "glb", "gltf", "usdz", "obj"];
 
 /**
  * Step 1 of an upload: reserve a random file name and say where to send it.

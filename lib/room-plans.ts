@@ -9,6 +9,7 @@ export type PlanOpening = { kind: "door" | "window"; label: string; from: number
 export type PlanEdge = { length: number; openings: PlanOpening[] };
 export type PlanObstacle = { label: string; x: number; y: number; w: number; h: number; height: number };
 export type RoomPlan = {
+  title: string; level: 0 | 1; levelName: string;
   ceiling: number; area: number; width: number; depth: number;
   points: [number, number][]; edges: PlanEdge[]; obstacles: PlanObstacle[]; notes: string[];
 };

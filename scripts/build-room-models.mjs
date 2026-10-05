@@ -17,13 +17,26 @@ const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
 const unit = (a) => mul(a, 1 / Math.hypot(...a));
 
-const newMesh = () => ({ pos: [], nrm: [], idx: [] });
+const newMesh = (kind) => ({ kind, pos: [], nrm: [], col: [], idx: [] });
+
+// Baked shading, so the model has depth even under flat viewer lighting: faces are lit from above-left,
+// and walls fade darker toward the floor (a cheap stand-in for ambient occlusion).
+const LIGHT = unit([-0.35, 0.85, 0.4]);
+let CEILING = 2.4;
+function shade(kind, n, y) {
+  if (kind === "dims") return [1, 1, 1, 1];
+  const s = (0.5 + 0.5 * Math.max(0, dot(n, LIGHT))) / (0.5 + 0.5 * LIGHT[1]);
+  let k = s;
+  if (Math.abs(n[1]) < 0.5) k *= 0.72 + 0.28 * Math.min(1, Math.max(0, y / CEILING));
+  if (kind === "units" && n[1] > 0.9) k *= 1.12;
+  return [k, k, k, 1];
+}
 function quad(m, p, n) {
   // p = four corners; wound so the face points along n
   const w = cross(sub(p[1], p[0]), sub(p[2], p[0]));
   const q = dot(w, n) < 0 ? [p[0], p[3], p[2], p[1]] : p;
   const base = m.pos.length / 3;
-  for (const v of q) { m.pos.push(...v); m.nrm.push(...n); }
+  for (const v of q) { m.pos.push(...v); m.nrm.push(...n); m.col.push(...shade(m.kind, n, v[1])); }
   m.idx.push(base, base + 1, base + 2, base, base + 2, base + 3);
 }
 /** Box with one corner at o and edge vectors u, v, w. */
@@ -74,8 +87,9 @@ const pointInPoly = (p, P) => {
 };
 
 function buildRoom(plan) {
-  const walls = newMesh(), floor = newMesh(), units = newMesh(), dims = newMesh();
+  const walls = newMesh("walls"), floor = newMesh("floor"), units = newMesh("units"), dims = newMesh("dims");
   const P = plan.points, n = P.length, C = plan.ceiling;
+  CEILING = C;
   let S = 0; for (let i = 0; i < n; i++) S += P[i][0] * P[(i + 1) % n][1] - P[(i + 1) % n][0] * P[i][1];
   const orient = Math.sign(S);
   const dir = P.map((a, i) => { const b = P[(i + 1) % n]; const l = Math.hypot(b[0] - a[0], b[1] - a[1]); return [(b[0] - a[0]) / l, (b[1] - a[1]) / l]; });
@@ -116,7 +130,7 @@ function buildRoom(plan) {
   // floor
   const tri = triangulate(P);
   const base = floor.pos.length / 3;
-  for (const [x, z] of P) { floor.pos.push(x, 0, z); floor.nrm.push(0, 1, 0); }
+  for (const [x, z] of P) { floor.pos.push(x, 0, z); floor.nrm.push(0, 1, 0); floor.col.push(...shade("floor", [0, 1, 0], 0)); }
   for (const t of tri) {
     const [a, b, c] = t.map((k) => P[k]);
     const up = (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]); // sign in (x,z); y-up normal is -this for a right-handed (x,z) → flip to face +y
@@ -138,10 +152,14 @@ const io = new NodeIO();
 mkdirSync(new URL("../public/models/", import.meta.url), { recursive: true });
 for (const [id, plan] of Object.entries(plans)) {
   const doc = new Document(); const buf = doc.createBuffer(); const scene = doc.createScene(id);
+  // Each level gets its own colours so you can tell at a glance which floor a room is on: warm sand downstairs, cool lavender upstairs.
+  const LEVEL = plan.level === 0
+    ? { walls: [0.92, 0.84, 0.7, 1], floor: [0.7, 0.55, 0.38, 1] }
+    : { walls: [0.82, 0.8, 0.95, 1], floor: [0.58, 0.55, 0.8, 1] };
   const mats = {
-    walls: doc.createMaterial("walls").setBaseColorFactor([0.78, 0.79, 0.83, 1]).setRoughnessFactor(0.95).setMetallicFactor(0).setDoubleSided(true),
-    floor: doc.createMaterial("floor").setBaseColorFactor([0.84, 0.82, 0.9, 1]).setRoughnessFactor(0.9).setMetallicFactor(0).setDoubleSided(true),
-    units: doc.createMaterial("units").setBaseColorFactor([0.83, 0.78, 0.7, 1]).setRoughnessFactor(0.9).setMetallicFactor(0),
+    walls: doc.createMaterial("walls").setBaseColorFactor(LEVEL.walls).setRoughnessFactor(0.95).setMetallicFactor(0).setDoubleSided(true),
+    floor: doc.createMaterial("floor").setBaseColorFactor(LEVEL.floor).setRoughnessFactor(0.9).setMetallicFactor(0).setDoubleSided(true),
+    units: doc.createMaterial("units").setBaseColorFactor([0.66, 0.46, 0.3, 1]).setRoughnessFactor(0.9).setMetallicFactor(0),
     dims: doc.createMaterial("dimensions").setBaseColorFactor([0.71, 0.35, 0.18, 1]).setRoughnessFactor(0.6).setMetallicFactor(0),
   };
   const built = buildRoom(plan);
@@ -151,6 +169,7 @@ for (const [id, plan] of Object.entries(plans)) {
     const prim = doc.createPrimitive().setMaterial(mats[key])
       .setAttribute("POSITION", doc.createAccessor().setType("VEC3").setArray(new Float32Array(m.pos)).setBuffer(buf))
       .setAttribute("NORMAL", doc.createAccessor().setType("VEC3").setArray(new Float32Array(m.nrm)).setBuffer(buf))
+      .setAttribute("COLOR_0", doc.createAccessor().setType("VEC4").setArray(new Float32Array(m.col)).setBuffer(buf))
       .setIndices(doc.createAccessor().setType("SCALAR").setArray(new Uint32Array(m.idx)).setBuffer(buf));
     mesh.addPrimitive(prim);
   }

@@ -7,7 +7,7 @@ export const fileName = (ext: string) => `${crypto.randomBytes(9).toString("base
 
 export const CONTENT_TYPES: Record<string, string> = {
   jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", webp: "image/webp", gif: "image/gif", heic: "image/heic",
-  glb: "model/gltf-binary", gltf: "model/gltf+json", usdz: "model/vnd.usdz+zip", obj: "text/plain",
+  pdf: "application/pdf", glb: "model/gltf-binary", gltf: "model/gltf+json", usdz: "model/vnd.usdz+zip", obj: "text/plain",
 };
 export const contentTypeOf = (name: string) => CONTENT_TYPES[name.split(".").pop()!.toLowerCase()] ?? "application/octet-stream";
 

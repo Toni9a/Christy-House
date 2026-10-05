@@ -121,7 +121,10 @@
   "obstacles": [],
   "notes": [
    "The chimney breast on the left wall sticks out about 0.52 m and is 1.3 m wide."
-  ]
+  ],
+  "title": "Living room",
+  "level": 0,
+  "levelName": "Ground floor"
  },
  "kitchen": {
   "ceiling": 2.45,
@@ -263,7 +266,10 @@
   "notes": [
    "Between the two counter runs there is about 1.36 m of clear floor.",
    "Counter runs are about 0.7 m deep (read from the scan at 35 cm height)."
-  ]
+  ],
+  "title": "Kitchen",
+  "level": 0,
+  "levelName": "Ground floor"
  },
  "bedroom1": {
   "ceiling": 2.37,
@@ -379,7 +385,10 @@
   ],
   "notes": [
    "The stairwell takes the bottom-left corner of the plan, so the usable floor there is smaller than the outline suggests."
-  ]
+  ],
+  "title": "Bedroom 1 (master)",
+  "level": 1,
+  "levelName": "First floor"
  },
  "bedroom2": {
   "ceiling": 2.37,
@@ -461,6 +470,9 @@
   "obstacles": [],
   "notes": [
    "The wardrobe and landing walls cut a 1 m \u00d7 1.5 m corner out of the room."
-  ]
+  ],
+  "title": "Bedroom 2",
+  "level": 1,
+  "levelName": "First floor"
  }
 }
