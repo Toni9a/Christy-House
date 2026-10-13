@@ -7,6 +7,7 @@ const LINKS = [
   { href: "/", label: "Home", icon: "M3 11 12 4l9 7v9a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z" },
   { href: "/rooms", label: "Rooms", icon: "M4 4h16v16H4zM4 12h9M13 4v16" },
   { href: "/items", label: "Items", icon: "M4 7h16M4 12h16M4 17h10" },
+  { href: "/try", label: "Try", icon: "M4 15v-3a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v3M3 15h18v3H3zM6 18v2M18 18v2M7 10V7a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v3" },
   { href: "/find", label: "Find", icon: "M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14zm9 16-4-4" },
   { href: "/movein", label: "Move-in", icon: "M5 21V8l7-5 7 5v13M10 21v-6h4v6" },
   { href: "/value", label: "Value", icon: "M4 19h16M6 16V9m6 7V5m6 11v-4" },

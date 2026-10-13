@@ -44,7 +44,8 @@ export default async function Home() {
               Every room, everything in it, and everything you’re after. Send a photo or link of anything you like and get real listings at your price, that actually fit.
             </p>
             <div className="mt-6 flex flex-wrap gap-3">
-              <Link href="/find" className="rounded-xl bg-accent px-5 py-3 text-sm font-medium text-accent-ink transition hover:brightness-110">Find something</Link>
+              <Link href="/try" className="rounded-xl bg-accent px-5 py-3 text-sm font-medium text-accent-ink transition hover:brightness-110">Try furniture in a room</Link>
+              <Link href="/find" className="rounded-xl border border-white/40 bg-white/15 px-5 py-3 text-sm font-medium text-white backdrop-blur transition hover:bg-white/25">Find something</Link>
               <Link href="/items" className="rounded-xl border border-white/40 bg-white/15 px-5 py-3 text-sm font-medium text-white backdrop-blur transition hover:bg-white/25">All items</Link>
             </div>
           </div>
@@ -63,6 +64,15 @@ export default async function Home() {
           ))}
         </Card>
       </section>
+
+      {/* Try furniture */}
+      <Link href="/try" className="-mt-6 flex items-center justify-between gap-4 rounded-2xl border border-accent/40 bg-accent-soft px-5 py-4 transition hover:brightness-[1.03]">
+        <span>
+          <span className="block font-display text-xl">Try a sofa in the room</span>
+          <span className="text-sm text-muted">Add a photo or a listing screenshot. It’s drawn into our real room at its real, measured size.</span>
+        </span>
+        <span aria-hidden className="text-accent">→</span>
+      </Link>
 
       {/* Manuals */}
       <Link href="/movein#manuals" className="-mt-6 flex items-center justify-between gap-4 rounded-2xl border border-line bg-surface px-5 py-4 transition hover:bg-sunken">
