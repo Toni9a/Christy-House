@@ -25,6 +25,7 @@ async function call(model: string, body: object) {
     method: "POST", headers: { "content-type": "application/json", "x-goog-api-key": key() }, body: JSON.stringify(body),
   });
   const text = await res.text();
+  if (res.status === 402) throw new Error("The Gemini credits have run out. Top them up at ai.studio/projects, then try again.");
   if (!res.ok) throw new Error(`Gemini ${res.status}: ${text.slice(0, 300)}`);
   return JSON.parse(text);
 }

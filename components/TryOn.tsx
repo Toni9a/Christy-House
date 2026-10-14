@@ -18,7 +18,7 @@ const SHAPES: { value: Shape; label: string }[] = [
 ];
 
 const sizeOf = (s: ItemSpec) => ({ kind: s.category, width: s.widthCm / 100, depth: s.depthCm / 100, height: s.heightCm / 100, shape: s.shape,
-  seatDepth: s.seatDepthCm ? s.seatDepthCm / 100 : undefined, returnWidth: s.returnWidthCm ? s.returnWidthCm / 100 : undefined });
+  seatDepth: s.seatDepthCm ? s.seatDepthCm / 100 : undefined, returnWidth: s.returnWidthCm ? s.returnWidthCm / 100 : undefined, seats: s.seatsBack, seatsReturn: s.seatsReturn });
 
 function toPlacement(p: Pos, s: ItemSpec): Placement {
   const r = (p.rot * Math.PI) / 180, c = Math.cos(r), sn = Math.sin(r), w = s.widthCm / 200, d = s.depthCm / 200;
@@ -91,8 +91,22 @@ export function TryOn({ rooms, plans, photos, initialViews, initialRenders, idea
   const view = views.find((v) => v.id === viewId) ?? null;
   const roomPhotos = photos.filter((p) => p.roomId === roomId && !views.some((v) => v.file === p.file));
 
-  // pick the first view of the room, and put the item against the wall that photo faces
-  useEffect(() => { if (!roomViews.some((v) => v.id === viewId)) setViewId(roomViews[0]?.id ?? null); }, [roomId, views]); // eslint-disable-line
+  // pick the best-measured view of the room, and put the item against the wall that photo faces
+  useEffect(() => {
+    if (!roomViews.some((v) => v.id === viewId)) setViewId([...roomViews].sort((a, b) => a.rmsPct - b.rmsPct)[0]?.id ?? null);
+  }, [roomId, views]); // eslint-disable-line
+  // measure the room's photos automatically, one at a time (each takes about 20s, once ever)
+  const [failed, setFailed] = useState<string[]>([]);
+  const queue = roomPhotos.filter((p) => !failed.includes(p.file));
+  useEffect(() => {
+    if (measuring || !queue.length) return;
+    const file = queue[0].file;
+    setMeasuring(file);
+    fetch("/api/tryon/views", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ roomId, file }) })
+      .then(async (r) => { const data = await r.json(); if (r.ok) setViews((v) => [...v.filter((x) => x.file !== data.file), data]); else setFailed((f) => [...f, file]); })
+      .catch(() => setFailed((f) => [...f, file]))
+      .finally(() => setMeasuring(null));
+  }, [roomId, queue.length, measuring]); // eslint-disable-line
   useEffect(() => { if (spec && plan && view) setPos(againstWall(plan, facingWall(plan, view, spec), spec)); }, [viewId, roomId, spec?.widthCm, spec?.depthCm]); // eslint-disable-line
 
   async function addItemPhoto(f: File | null) {
@@ -204,6 +218,12 @@ export function TryOn({ rooms, plans, photos, initialViews, initialRenders, idea
                     <label className="text-[12px] text-muted">Corner/chaise width (cm)<input type="number" className={inputCls + " mt-1"} value={spec.returnWidthCm ?? 90} onChange={(e) => set({ returnWidthCm: Number(e.target.value) })} /></label>
                   </div>
                 )}
+                {spec.shape !== "box" && (
+                  <div className="grid grid-cols-2 gap-2">
+                    <label className="text-[12px] text-muted">Seats along the back<input type="number" min={1} max={8} className={inputCls + " mt-1"} value={spec.seatsBack ?? ""} onChange={(e) => set({ seatsBack: Number(e.target.value) || undefined })} /></label>
+                    {spec.shape !== "straight" && <label className="text-[12px] text-muted">Seats on the {spec.shape.startsWith("chaise") ? "chaise" : "corner side"}<input type="number" min={1} max={6} className={inputCls + " mt-1"} value={spec.seatsReturn ?? ""} onChange={(e) => set({ seatsReturn: Number(e.target.value) || undefined })} /></label>}
+                  </div>
+                )}
                 <details className="text-[13px]">
                   <summary className="cursor-pointer text-muted">What makes it this one ({spec.identity.length} details Gemini must keep)</summary>
                   <ul className="mt-2 list-disc space-y-0.5 pl-5 text-muted">{spec.identity.map((s, i) => <li key={i}>{s}</li>)}</ul>
@@ -232,15 +252,14 @@ export function TryOn({ rooms, plans, photos, initialViews, initialRenders, idea
               <button onClick={() => forgetView(v.id)} title="Don’t use this photo" className="absolute right-1.5 top-1.5 rounded-full bg-ink/70 px-1.5 text-xs text-paper">✕</button>
             </div>
           ))}
-          {roomPhotos.map((p) => (
-            <button key={p.id} disabled={!!measuring} onClick={() => measurePhoto(p.file)}
-              className="relative h-28 shrink-0 overflow-hidden rounded-xl opacity-70 ring-1 ring-line hover:opacity-100 disabled:cursor-wait">
-              <img src={fileUrl(p.file)} alt="" className="h-full w-auto grayscale" />
-              <span className="absolute inset-x-0 bottom-0 bg-ink/70 px-2 py-1 text-[11px] text-paper">{measuring === p.file ? "Measuring…" : "Use this photo"}</span>
-            </button>
-          ))}
+          {queue.length > 0 && (
+            <div className="flex h-28 w-40 shrink-0 flex-col items-center justify-center rounded-xl bg-sunken px-3 text-center text-[12px] text-muted">
+              <span className="mb-1 size-4 animate-spin rounded-full border-2 border-accent border-t-transparent" />
+              Measuring {queue.length} photo{queue.length > 1 ? "s" : ""} of this room… (about 20s each, only ever once)
+            </div>
+          )}
           <label className={`flex h-28 w-36 shrink-0 cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-line px-3 text-center text-[12px] text-muted hover:bg-sunken ${measuring ? "opacity-60" : ""}`}>
-            {measuring === "upload" ? "Measuring… (about 20s)" : "Add a photo of this room"}
+            {measuring === "upload" ? "Measuring… (about 20s)" : "Add another photo of this room"}
             <span className="mt-1 text-[11px] text-faint">from a corner, showing two walls, floor and ceiling</span>
             <input type="file" accept="image/*" hidden disabled={!!measuring} onChange={(e) => e.target.files?.[0] && measurePhoto(e.target.files[0])} />
           </label>

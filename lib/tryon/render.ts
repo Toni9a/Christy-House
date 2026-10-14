@@ -23,6 +23,7 @@ export type RenderOutput = { result: Buffer; plate: Buffer; guide: Buffer; check
 const sizeOf = (s: ItemSpec) => ({
   kind: s.category, width: s.widthCm / 100, depth: s.depthCm / 100, height: s.heightCm / 100, shape: s.shape,
   seatDepth: s.seatDepthCm ? s.seatDepthCm / 100 : undefined, returnWidth: s.returnWidthCm ? s.returnWidthCm / 100 : undefined,
+  seats: s.seatsBack, seatsReturn: s.seatsReturn,
 });
 
 const none = (s: string) => !s || /^none\b/i.test(s.trim());
@@ -47,17 +48,28 @@ export async function renderTryOn({ room: roomIn, cam, product, spec, placement 
   const guideMask = await sharp(Buffer.from(blocksSvg(gcam, blocks, { bg: "#000", mask: true }))).greyscale().raw().toBuffer();
 
   // ── 2. product shot, fitted to the block (one retry if the silhouette is off, keep the better one)
+  const side = (sh?: string) => (sh?.endsWith("left") ? "left" : sh?.endsWith("right") ? "right" : null);
   const leave = [spec.leaveOut].filter((s) => !none(s)).join("; ");
-  const platePrompt = `Image 1 shows a ${spec.category} for sale. Image 2 is a grey 3D block model: the exact size, shape, position and viewing angle the ${spec.category} must have.
+  const platePrompt = `Image 1 shows a ${spec.category}. Image 2 is a grey 3D block model: the exact size, shape, position and viewing angle the ${spec.category} must have.
 
 Draw the exact ${spec.category} from image 1 so that it fills the grey block in image 2 precisely: the same outline, the same viewing angle, the same place in the frame. Output the same framing as image 2.
 - It must be the same product, not a similar one: ${spec.identity.join("; ")}.
-- Layout: ${spec.layout || spec.shape}. Keep exactly the same number of seats and cushions as image 1: do not add sections to fill the block, make each section bigger instead.
-- The block shows which way round it goes. If image 1 shows it the other way round, draw its mirror-image version (the same product in the opposite hand).
+- Layout: ${spec.layout || spec.shape}.${spec.seatsBack ? ` The grey block shows each seat cushion: exactly ${spec.seatsBack} seat cushion${spec.seatsBack > 1 ? "s" : ""} along the main run${spec.seatsReturn ? ` and ${spec.seatsReturn} on the ${spec.shape.startsWith("chaise") ? "chaise" : "return"}` : ""}, one per grey seat block.` : ""} Never add seats or sections to fill the space: make each one bigger instead.
+- It is already the right way round in image 1 (${side(spec.shape) ? `its ${spec.shape.startsWith("chaise") ? "chaise" : "corner side"} is on the ${side(spec.shape)} as you face it` : "as shown"}): keep that, just turn it to the block's angle.
 - Match the block's angle even if image 1 was photographed from another angle: turn the product in 3D to fit.
-${leave ? `- Leave out: ${leave}. Show only the ${spec.category} itself.\n` : ""}- Show it as it stands in a room${none(spec.mechanisms) ? "" : `, with ${spec.mechanisms} closed`}. No people, props, rugs, floor or shadow.
+${leave ? `- Leave out: ${leave}. Show only the ${spec.category} itself.\n` : ""}- Show it as it normally stands, everything closed and folded away. No people, props, rugs, floor or shadow.
 - Background: flat pure ${greenish ? "magenta #FF00FF" : "green #00FF00"} everywhere around it, perfectly even.`;
-  const productPart = await imagePart(product, 1600), guidePart = await imagePart(guide);
+  // Stage A: a clean copy in the photo's own angle, with extra pieces gone and mechanisms closed. Re-angling a clean
+  // single object (stage B) works far better than re-angling a busy listing photo.
+  const closeUp = none(spec.mechanisms) ? "" : ` Close or fold away: ${spec.mechanisms.replace(/\b(extended|open(ed)?|pulled out|out)\b/gi, "").trim()}; show it as it normally stands.`;
+  let clean = product;
+  try {
+    clean = await generateImage(HARMONISE_MODEL, [{ text: `Make a clean product photo of only the ${spec.category} in this image, from the same angle, on a plain white background.${leave ? ` Remove: ${leave}.` : ""}${closeUp} Keep everything about the ${spec.category} itself exactly the same: shape, number of seats and cushions, colour, fabric, arms, legs and extras. No text, no people, no other objects.` }, await imagePart(product, 1600)], nearestRatio(4 / 3), "1K");
+  } catch { /* fall back to the original photo */ }
+  // Gemini won't reliably mirror a product, so do it here: if it's wanted the other way round from the photo, flip it.
+  const flip = side(spec.photoShape) && side(spec.shape) && side(spec.photoShape) !== side(spec.shape);
+  if (flip) clean = await sharp(clean).flop().jpeg({ quality: 92 }).toBuffer();
+  const productPart = await imagePart(clean, 1600), guidePart = await imagePart(guide);
 
   const N = GW * GH;
   async function makePlate() {
@@ -88,8 +100,23 @@ ${leave ? `- Leave out: ${leave}. Show only the ${spec.category} itself.\n` : ""
     }
     return { raw, rgba, fit: union ? inter / union : 0 };
   }
-  let plate = await makePlate();
-  if (plate.fit < 0.8) { const again = await makePlate().catch(() => null); if (again && again.fit > plate.fit) plate = again; }
+  // a plate is good when it fills the block and has the right number of seats (Gemini likes to add sections)
+  const wantSeats = (spec.seatsBack ?? 0) + (spec.seatsReturn ?? 0);
+  const seatsOk = async (raw: Buffer) => {
+    if (!wantSeats) return true;
+    try {
+      const j = await askJson<{ seat_cushions?: number }>(`How many separate seat cushions (the parts you sit on, not back cushions or scatter cushions) does this ${spec.category} have in total? JSON {"seat_cushions": number}`, [raw], { fast: true });
+      return Math.round(Number(j.seat_cushions)) === wantSeats;
+    } catch { return true; }
+  };
+  const score = async (p: Awaited<ReturnType<typeof makePlate>>) => p.fit + ((await seatsOk(p.raw)) ? 1 : 0);
+  let plate = await makePlate(), best = await score(plate);
+  for (let tries = 0; tries < 2 && best < 1.8; tries++) {
+    const again = await makePlate().catch(() => null);
+    if (!again) continue;
+    const s2 = await score(again);
+    if (s2 > best) { plate = again; best = s2; }
+  }
   if (plate.fit < 0.5) throw new Error("Gemini could not draw this item in that position. Try a clearer photo of it, or check the shape and size.");
 
   // ── 3. paste where the block is, over a contact shadow drawn from the block's footprint
@@ -125,8 +152,13 @@ Do not change anything else in the room, the framing or the crop.`;
   const bw = b.x1 - b.x0, bh = b.y1 - b.y0;
   const zone = [b.x0 - 0.1 * bw, b.y0 - 0.15 * bh, b.x1 + 0.1 * bw, b.y1 + 0.15 * bh].map((v, i) => Math.round(Math.max(0, Math.min(i % 2 ? H : W, v))));
   const f = Math.max(4, Math.round(Math.min(bw, bh) * 0.1));
-  const maskSvg = `<svg width="${W}" height="${H}" xmlns="http://www.w3.org/2000/svg"><defs><filter id="b"><feGaussianBlur stdDeviation="${f / 2}"/></filter></defs><rect width="${W}" height="${H}" fill="black"/><rect x="${zone[0] + f}" y="${zone[1] + f}" width="${Math.max(1, zone[2] - zone[0] - 2 * f)}" height="${Math.max(1, zone[3] - zone[1] - 2 * f)}" fill="white" filter="url(#b)"/></svg>`;
-  const mask = await sharp(Buffer.from(maskSvg)).greyscale().raw().toBuffer();
+  // the editable area is the item's own silhouette plus its floor shadow, grown and feathered a little
+  const silhouette = await sharp(cutVis).extractChannel(3).toBuffer();
+  const feetWhite = Buffer.from(`<svg width="${W}" height="${H}" xmlns="http://www.w3.org/2000/svg">${blocks.map((v) => `<polygon points="${v.slice(0, 4).map(P).join(" ")}" fill="#fff"/>`).join("")}</svg>`);
+  const hard = await sharp({ create: { width: W, height: H, channels: 3, background: "#000" } })
+    .composite([{ input: feetWhite }, { input: await sharp(silhouette).toColourspace("b-w").png().toBuffer(), left: Math.max(0, left), top: Math.max(0, top), blend: "lighten" }])
+    .greyscale().png().toBuffer();
+  const mask = await sharp(hard).blur(f).linear(3, 0).greyscale().raw().toBuffer();
   const edited = await sharp(harm).removeAlpha().joinChannel(mask, { raw: { width: W, height: H, channels: 1 } }).png().toBuffer();
   const result = await sharp(room).composite([{ input: edited }]).jpeg({ quality: 92 }).toBuffer();
 

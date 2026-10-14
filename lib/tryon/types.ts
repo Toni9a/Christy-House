@@ -10,7 +10,10 @@ export type ItemSpec = {
   widthCm: number; depthCm: number; heightCm: number;
   dimsSource: "printed" | "estimated" | "typed";
   shape: Shape;
+  photoShape?: Shape;       // which way round it is in the photo (corner/chaise on the left or right), as read
   seatDepthCm?: number; returnWidthCm?: number;
+  seatsBack?: number;       // seat cushions along the main run (corner seat included)
+  seatsReturn?: number;     // seat cushions on the corner/chaise part, not counting the corner
   layout: string;           // e.g. "3 seats along the back, chaise on the left"
   identity: string[];       // checkable visual facts that make it this product
   leaveOut: string;         // separate pieces / people / props in the photo that are not part of it

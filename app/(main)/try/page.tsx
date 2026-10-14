@@ -4,13 +4,13 @@ import { Eyebrow } from "@/components/ui";
 import { config } from "@/lib/config";
 import { ROOM_PLANS } from "@/lib/room-plans";
 import { listItems, listPhotosByKind, listRooms } from "@/lib/store";
-import { loadRenders, loadViews } from "@/lib/tryon/store";
+import { loadRenders, loadSkipped, loadViews } from "@/lib/tryon/store";
 
 export const metadata: Metadata = { title: "Try furniture · Christy’s House" };
 export const dynamic = "force-dynamic";
 
 export default async function TryPage() {
-  const [rooms, movein, now, views, renders, items] = await Promise.all([listRooms(), listPhotosByKind("movein"), listPhotosByKind("now"), loadViews(), loadRenders(), listItems()]);
+  const [rooms, movein, now, views, renders, items, skipped] = await Promise.all([listRooms(), listPhotosByKind("movein"), listPhotosByKind("now"), loadViews(), loadRenders(), listItems(), loadSkipped()]);
   const ideas = items.flatMap((i) => {
     const file = i.image_url?.match(/^\/api\/files\/([\w-]+\.(?:jpe?g|png|webp))$/i)?.[1];
     return file ? [{ file, title: i.title }] : [];
@@ -24,7 +24,7 @@ export default async function TryPage() {
           Add a photo of a sofa (or anything else) and see it in our real rooms at its real size. The size and position come from the room’s measured plan, not from the AI: Gemini only draws your exact piece into the space and matches the light.
         </p>
       </div>
-      <TryOn rooms={rooms.map((r) => ({ id: r.id, name: r.name }))} plans={ROOM_PLANS} photos={[...movein, ...now]} initialViews={views} initialRenders={renders} ideas={ideas} />
+      <TryOn rooms={rooms.map((r) => ({ id: r.id, name: r.name }))} plans={ROOM_PLANS} photos={[...movein, ...now].filter((p) => !skipped.includes(p.file))} initialViews={views} initialRenders={renders} ideas={ideas} />
     </div>
   );
 }

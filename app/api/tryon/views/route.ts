@@ -4,7 +4,7 @@ import { getWho } from "@/lib/identity";
 import { ROOM_PLANS } from "@/lib/room-plans";
 import { getFile } from "@/lib/store";
 import { calibratePhoto } from "@/lib/tryon/calibrate";
-import { FILE_RE, loadViews, saveViews } from "@/lib/tryon/store";
+import { FILE_RE, loadViews, saveViews, skipPhoto } from "@/lib/tryon/store";
 
 export const maxDuration = 300;
 
@@ -23,12 +23,13 @@ export async function POST(req: Request) {
   if (!photo) return bad("Couldn’t find that photo.", 404);
   try {
     const c = await calibratePhoto(photo.data, plan);
-    if (c.rmsPct > 2.5) return bad("Couldn’t line this photo up with the room’s plan. Try a wider photo that shows two walls, the floor and the ceiling.", 422);
+    if (c.rmsPct > 2.5) { await skipPhoto(file); return bad("Couldn’t line this photo up with the room’s plan. Try a wider photo that shows two walls, the floor and the ceiling.", 422); }
     const view = { id: newId(), roomId: String(roomId), file, cam: c.cam, rmsPct: +c.rmsPct.toFixed(2), addedBy: await getWho(), addedAt: new Date().toISOString() };
     const views = (await loadViews()).filter((v) => v.file !== file);
     await saveViews([...views, view]);
     return Response.json(view);
   } catch (e) {
+    await skipPhoto(file);
     return bad(e instanceof Error ? e.message : "Couldn’t measure that photo.", 422);
   }
 }

@@ -20,7 +20,9 @@ function cleanSpec(s: any): ItemSpec | string {
     category: text(s.category, 60) || "sofa", widthCm, depthCm, heightCm,
     dimsSource: s.dimsSource === "printed" || s.dimsSource === "typed" ? s.dimsSource : "estimated",
     shape: SHAPES.includes(s.shape) ? s.shape : "straight",
+    photoShape: SHAPES.includes(s.photoShape) ? s.photoShape : undefined,
     seatDepthCm: cm(s.seatDepthCm, 30, 300) ?? undefined, returnWidthCm: cm(s.returnWidthCm, 30, 300) ?? undefined,
+    seatsBack: cm(s.seatsBack, 1, 8) ?? undefined, seatsReturn: cm(s.seatsReturn, 1, 6) ?? undefined,
     layout: text(s.layout, 300), identity: (Array.isArray(s.identity) ? s.identity : []).map((x: unknown) => text(x, 200)).slice(0, 16),
     leaveOut: text(s.leaveOut, 300) || "none", mechanisms: text(s.mechanisms, 200) || "none", notes: text(s.notes, 400),
   };

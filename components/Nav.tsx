@@ -9,9 +9,12 @@ const LINKS = [
   { href: "/items", label: "Items", icon: "M4 7h16M4 12h16M4 17h10" },
   { href: "/try", label: "Try", icon: "M4 15v-3a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v3M3 15h18v3H3zM6 18v2M18 18v2M7 10V7a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v3" },
   { href: "/find", label: "Find", icon: "M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14zm9 16-4-4" },
-  { href: "/movein", label: "Move-in", icon: "M5 21V8l7-5 7 5v13M10 21v-6h4v6" },
+  { href: "/movein", label: "House", icon: "M5 21V8l7-5 7 5v13M10 21v-6h4v6" },
   { href: "/value", label: "Value", icon: "M4 19h16M6 16V9m6 7V5m6 11v-4" },
 ];
+
+/** The phone bar has room for five: Items is on Home and in each room, Value is on the House page. */
+const PHONE_TABS = ["/", "/rooms", "/try", "/find", "/movein"];
 
 export function Nav({ houseName, rooms, who }: { houseName: string; rooms: { id: string; name: string; count: number }[]; who: string | null }) {
   const path = usePathname();
@@ -67,9 +70,9 @@ export function Nav({ houseName, rooms, who }: { houseName: string; rooms: { id:
 
       {/* Phone tab bar */}
       <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-surface/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-md sm:hidden">
-        <div className="grid grid-cols-6">
-          {LINKS.map((l) => (
-            <Link key={l.href} href={l.href} className={`flex flex-col items-center gap-1 py-2.5 text-[11px] ${active(l.href) || (l.href === "/rooms" && path.startsWith("/rooms")) ? "text-accent" : "text-muted"}`}>
+        <div className="grid grid-cols-5">
+          {LINKS.filter((l) => PHONE_TABS.includes(l.href)).map((l) => (
+            <Link key={l.href} href={l.href} className={`flex flex-col items-center gap-1 py-2.5 text-[11px] ${active(l.href) || (l.href === "/rooms" && path.startsWith("/rooms")) || (l.href === "/movein" && path.startsWith("/value")) ? "text-accent" : "text-muted"}`}>
               <svg viewBox="0 0 24 24" className="size-5" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
                 <path d={l.icon} />
               </svg>
