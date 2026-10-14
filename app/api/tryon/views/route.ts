@@ -6,7 +6,7 @@ import { getFile } from "@/lib/store";
 import { calibratePhoto } from "@/lib/tryon/calibrate";
 import { FILE_RE, loadViews, saveViews } from "@/lib/tryon/store";
 
-export const maxDuration = 120;
+export const maxDuration = 300;
 
 export async function GET() {
   return Response.json(await loadViews());

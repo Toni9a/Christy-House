@@ -29,9 +29,9 @@ async function call(model: string, body: object) {
   return JSON.parse(text);
 }
 
-export async function askJson<T = any>(prompt: string, images: Buffer[]): Promise<T> {
-  const parts = [{ text: prompt }, ...(await Promise.all(images.map((b) => imagePart(b))))];
-  const data = await call(VISION_MODEL, { contents: [{ parts }], generationConfig: { responseMimeType: "application/json" } });
+export async function askJson<T = any>(prompt: string, images: Buffer[], opts: { fast?: boolean } = {}): Promise<T> {
+  const parts = [{ text: prompt }, ...(await Promise.all(images.map((b) => imagePart(b, opts.fast ? 1280 : 2000))))];
+  const data = await call(VISION_MODEL, { contents: [{ parts }], generationConfig: { responseMimeType: "application/json", ...(opts.fast ? { thinkingConfig: { thinkingLevel: "low" } } : {}) } });
   const text = (data.candidates?.[0]?.content?.parts ?? []).map((p: any) => p.text ?? "").join("");
   return JSON.parse(text);
 }

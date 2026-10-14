@@ -83,10 +83,8 @@ ${L.map((l) => `- ${l.name}: ${l.desc}`).join("\n")}
 For the wall lines ("-floor" / "-ceiling"), give 3 to 5 points spread along the visible part of the line, each as its own entry with the same name. Skip lines hidden behind furniture or curtains.
 
 Return JSON: {"view": "one sentence: where the camera is and what it faces", "points": [{"name": "...", "point": [y, x]}]} with y and x normalised to 0-1000.`;
-  // Three independent reads, pooled: a corner one read mislabels gets outvoted by the other two in the fit.
   const images = [await planImage(plan), await img.jpeg().toBuffer()];
-  const answers = await Promise.all([0, 1, 2].map(() => askJson<{ view?: string; points?: { name: string; point: [number, number] }[] }>(prompt, images).catch(() => ({ points: [] }))));
-  const ans = { points: answers.flatMap((a) => a.points ?? []) };
+  const ans = await askJson<{ view?: string; points?: { name: string; point: [number, number] }[] }>(prompt, images, { fast: true });
   const byName = new Map(L.map((l) => [l.name, l]));
   const pairs: Correspondence[] = (ans.points ?? []).flatMap((p, k) => {
     const l = byName.get(p.name);
@@ -95,7 +93,7 @@ Return JSON: {"view": "one sentence: where the camera is and what it faces", "po
     return [l.world ? { name: p.name, world: l.world, px } : { name: `${p.name}#${k}`, line: l.line!, px }];
   });
   const corners = pairs.filter((p) => p.world).length;
-  if (corners < 6 || pairs.length < 20) throw new Error(`Could not find enough of the room's corners in this photo. Take one from a corner of the room that shows at least two walls, the floor and the ceiling.`);
+  if (corners < 4 || pairs.length < 10) throw new Error(`Could not find enough of the room's corners in this photo. Take one from a corner of the room that shows at least two walls, the floor and the ceiling.`);
   const xs = plan.points.map((p) => p[0]), ys = plan.points.map((p) => p[1]);
   const fit = fitCamera(pairs, W, H, { x0: Math.min(...xs), y0: Math.min(...ys), x1: Math.max(...xs), y1: Math.max(...ys) });
   return { cam: fit.cam, rmsPct: fit.rmsPct, used: pairs.length - fit.dropped.length, dropped: fit.dropped };

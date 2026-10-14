@@ -77,7 +77,7 @@ export function fitCamera(pairs: Correspondence[], W: number, H: number, area: {
   const long = Math.max(W, H);
   const unpack = (p: number[], focal: number | null): Camera => ({ focal: (focal ?? p[0]) * W, rot: [p[1], p[2], p[3]], pos: [p[4], p[5], p[6]], cx: W / 2, cy: H / 2, W, H });
   const costFor = (ps: Correspondence[], focal: number | null) => (p: number[]) => {
-    if ((focal == null && (p[0] < 0.3 || p[0] > 3)) || Math.abs(p[2]) > 0.9 || Math.abs(p[3]) > 0.5 || p[6] < 0.3 || p[6] > 2.6) return 1e12;
+    if ((focal == null && (p[0] < 0.3 || p[0] > 3)) || Math.abs(p[2]) > 0.9 || Math.abs(p[3]) > 0.5 || p[6] < 0.9 || p[6] > 2.2) return 1e12; // a phone is held between knee and above-head height
     // the photographer stands in the room (or its doorway)
     if (p[4] < area.x0 - slack || p[4] > area.x1 + slack || p[5] < area.y0 - slack || p[5] > area.y1 + slack) return 1e12;
     const cam = unpack(p, focal);
@@ -93,7 +93,7 @@ export function fitCamera(pairs: Correspondence[], W: number, H: number, area: {
   const polish = (cost: (p: number[]) => number, x: number[]) => {
     let r = { x, v: cost(x) };
     for (let k = 0; k < 4; k++) {
-      const next = nelderMead(cost, r.x, k % 2 ? [0.01, 0.01, 0.01, 0.005, 0.05, 0.05, 0.03] : [0.05, 0.05, 0.05, 0.02, 0.2, 0.2, 0.1], 1500);
+      const next = nelderMead(cost, r.x, k % 2 ? [0.01, 0.01, 0.01, 0.005, 0.05, 0.05, 0.03] : [0.05, 0.05, 0.05, 0.02, 0.2, 0.2, 0.1], 800);
       const done = next.v > r.v * 0.999;
       if (next.v < r.v) r = next;
       if (done && k > 0) break;
@@ -105,15 +105,15 @@ export function fitCamera(pairs: Correspondence[], W: number, H: number, area: {
     const corners = ps.filter((q) => q.world);
     const coarse = costFor(corners.length >= 5 ? corners : ps, focal);
     let best: { x: number[]; v: number } | null = null;
-    for (let i = 0; i < 2; i++) for (let j = 0; j < 2; j++) for (let k = 0; k < 8; k++) {
-      const x0 = [focal ?? 0.8, (k * Math.PI) / 4, -0.1, 0, area.x0 + ((i + 0.5) / 2) * (area.x1 - area.x0), area.y0 + ((j + 0.5) / 2) * (area.y1 - area.y0), 1.5];
-      const r = nelderMead(coarse, x0, [focal == null ? 0.2 : 0, 0.3, 0.1, 0.05, 0.5, 0.5, 0.3], 300);
+    for (let i = 0; i < 2; i++) for (let j = 0; j < 2; j++) for (let k = 0; k < 6; k++) {
+      const x0 = [focal ?? 0.8, (k * Math.PI) / 3, -0.1, 0, area.x0 + ((i + 0.5) / 2) * (area.x1 - area.x0), area.y0 + ((j + 0.5) / 2) * (area.y1 - area.y0), 1.5];
+      const r = nelderMead(coarse, x0, [focal == null ? 0.2 : 0, 0.3, 0.1, 0.05, 0.5, 0.5, 0.3], 200);
       if (!best || r.v < best.v) best = r;
     }
     return report(ps, polish(costFor(ps, focal), best!.x), focal);
   };
-  const run = (focal: number | null) => {
-    let used = pairs, fit = solve(used, focal), dropped: string[] = [];
+  const run = (focal: number | null, from?: number[]) => {
+    let used = pairs, fit = from ? report(used, polish(costFor(used, focal), from), focal) : solve(used, focal), dropped: string[] = [];
     for (let k = 0; k < Math.min(4, Math.floor(pairs.length / 5)) && used.length > 6; k++) {
       const worst = fit.errors.reduce((a, b) => (b.err > a.err ? b : a));
       if (worst.err < W * 0.015) break;
@@ -128,7 +128,7 @@ export function fitCamera(pairs: Correspondence[], W: number, H: number, area: {
   for (const mm of PHONE_LENSES_MM) {
     const f = ((long * mm) / 36) / W;
     if (Math.abs(Math.log(f / (free.cam.focal / W))) > 0.6) continue; // nowhere near: skip
-    const r = run(f);
+    const r = run(f, [f, ...free.x.slice(1)]);
     if (r.rms < best.rms) best = r;
   }
   const { x: _x, ...out } = best;
